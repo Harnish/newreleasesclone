@@ -1,0 +1,90 @@
+# Claude Rules for newreleases
+
+## Project Overview
+- **Language**: Go (module `newreleases`, `go 1.24.9`)
+- **Type**: Single-binary HTTP webapp with embedded HTML template
+- **Architecture**: In-memory store with mutex-protected concurrency; handlers in `main.go`
+- **Persistence**: YAML state file (`state.yaml`) for projects, releases, and refresh timestamps
+
+## Key Data Models
+- `Project`: { id, name, platform, repo_url, last_refresh (time), refresh_count (int) }
+- `Release`: { id, name, version, platform, url, published_at, description }
+- `Store`: Thread-safe maps (projects, releases, refreshed) with `sync.RWMutex`; tracks when each project was last refreshed
+
+## API Endpoints
+- `GET/POST /api/projects` — list or add projects
+- `GET /api/releases` — list all releases across projects
+- `GET /api/refresh-check` — check for stale projects (>30 min old) and auto-refresh them; called on page load
+- `POST /api/refresh?id={projectID}` — force refresh a specific project (manual trigger)
+- Frontend HTML embedded in template string in `main.go`
+
+## Build & Run
+```bash
+# Run locally
+go run main.go
+
+# Build binary
+go build  # → produces ./newreleases
+
+# Check code
+go vet
+```
+
+## Critical Patterns & Constraints
+1. **Embedded template**: HTML is a template string in `main.go`. Ensure valid Go string syntax and match field names in JSON tags exactly.
+2. **Concurrency**: Always use `mu.Lock()`/`mu.Unlock()` or `mu.RLock()`/`mu.RUnlock()` when accessing Store maps.
+3. **Field coupling**: Frontend JS reads `published_at`, `name`, `version`, `platform`, `last_refresh` directly from JSON. Changing field names requires updating both handler JSON tags AND inline template JS.
+4. **Release limits**: `AddRelease()` prepends new releases and keeps only 50 per project.
+5. **ID generation**: Use `fmt.Sprintf("proj_%d", time.Now().UnixNano())` for consistency.
+6. **Refresh mechanism** (NEW):
+   - **On add**: `POST /api/projects` auto-triggers `RefreshProject()` in a goroutine (calls `MarkRefreshed()`)
+   - **On page load**: `initializePage()` calls `GET /api/refresh-check` which auto-refreshes all stale projects (>30 min)
+   - **Manual**: Frontend "Refresh" button (green button in projects tab) calls `POST /api/refresh?id={projectID}`
+   - Refresh tracking stored in `store.refreshed` map; each project tracks `last_refresh` timestamp and `refresh_count`
+7. **Mock refresh**: `RefreshProject()` currently generates mock release data. In production, integrate real APIs (GitHub GraphQL, NPM registry, PyPI, etc.) based on `project.Platform`
+
+## Safety Rules for Changes
+- **Never** remove or rename `/api/projects`, `/api/releases`, `/api/refresh-check`, or `/api/refresh` without updating the inline template fetch calls.
+- **Always** preserve `sync.RWMutex` discipline.
+- **Always** call `MarkRefreshed(projectID)` after adding new releases so stale tracking is accurate.
+- **Test** that HTTP routes still respond with expected JSON after changes.
+- If modifying demo data in `seedDemoData()`, ensure `published_at` is a valid RFC3339 timestamp and call `MarkRefreshed()` for seeded projects.
+- When implementing real API calls in `RefreshProject()`, handle rate limits and network errors gracefully (don't crash the server).
+
+## File Locations
+- `main.go` — server, models, handlers, template
+- `go.mod` — module definition
+- `./newreleases` (root) — built binary artifact; don't edit
+
+## Example: Adding a Feature
+To add `DELETE /api/projects/{id}`:
+1. Update `handleProjects()` to check `r.Method == "DELETE"`
+2. Parse ID from URL or query param
+3. Acquire `s.mu.Lock()`, remove from `s.projects`, `s.releases`, and `s.refreshed`
+4. Return JSON response; remember to sync template if adding new UI buttons
+
+## Example: Integrating Real API (GitHub)
+To replace mock refresh with real GitHub data:
+1. In `RefreshProject()`, parse `project.Platform == "github"`
+2. Extract owner/repo from `project.RepoURL` (e.g., `github.com/kubernetes/kubernetes` → `kubernetes/kubernetes`)
+3. Call GitHub GraphQL or REST API to fetch latest releases
+4. Map returned releases to `Release{}` struct and call `s.AddRelease(projectID, release)` for each
+5. Always call `s.MarkRefreshed(projectID)` at the end
+6. Handle HTTP errors, rate limits, and malformed responses without crashing
+
+## No External Dependencies
+- Fully self-contained; no external API calls or database
+- Platform values are: `github`, `gitlab`, `npm`, `pypi`, `docker`
+
+## Persistence (NEW)
+- **Storage**: `state.yaml` at repo root (auto-created on first run)
+- **Format**: YAML with projects, releases, and refreshed timestamps
+- **Auto-save**: Every AddProject(), AddRelease(), MarkRefreshed() triggers async background save
+- **Load on startup**: main() calls LoadState() to restore all data; seeds demo if file missing
+- **Tags**: All structs have both `json:` and `yaml:` tags for HTTP/file serialization
+- See `STATE_STORAGE.md` for full details, examples, and future improvements
+
+## When Uncertain
+- Inspect `main.go` first — all core logic is there
+- Check JSON struct tags and template variable names for consistency
+- Test with `go run main.go` and manual HTTP requests to `/api/*`
