@@ -16,13 +16,14 @@ import (
 )
 
 type Release struct {
-	ID          string    `json:"id" yaml:"id"`
-	Name        string    `json:"name" yaml:"name"`
-	Version     string    `json:"version" yaml:"version"`
-	Platform    string    `json:"platform" yaml:"platform"`
-	URL         string    `json:"url" yaml:"url"`
-	PublishedAt time.Time `json:"published_at" yaml:"published_at"`
-	Description string    `json:"description" yaml:"description"`
+	ID           string    `json:"id" yaml:"id"`
+	Name         string    `json:"name" yaml:"name"`
+	Version      string    `json:"version" yaml:"version"`
+	Platform     string    `json:"platform" yaml:"platform"`
+	URL          string    `json:"url" yaml:"url"`
+	PublishedAt  time.Time `json:"published_at" yaml:"published_at"`
+	Description  string    `json:"description" yaml:"description"`
+	ReleaseNotes string    `json:"release_notes" yaml:"release_notes"`
 }
 
 type Project struct {
@@ -227,13 +228,14 @@ func fetchGitHubReleases(project Project) []Release {
 
 		pubTime, _ := time.Parse(time.RFC3339, gh.PublishedAt)
 		releases = append(releases, Release{
-			ID:          fmt.Sprintf("gh_%d", gh.ID),
-			Name:        project.Name,
-			Version:     gh.TagName,
-			Platform:    "github",
-			URL:         gh.HtmlUrl,
-			PublishedAt: pubTime,
-			Description: truncate(gh.Body, 200),
+			ID:           fmt.Sprintf("gh_%d", gh.ID),
+			Name:         project.Name,
+			Version:      gh.TagName,
+			Platform:     "github",
+			URL:          gh.HtmlUrl,
+			PublishedAt:  pubTime,
+			Description:  truncate(gh.Body, 200),
+			ReleaseNotes: gh.Body,
 		})
 	}
 
@@ -246,13 +248,14 @@ func fetchGitHubReleases(project Project) []Release {
 
 			pubTime, _ := time.Parse(time.RFC3339, gh.PublishedAt)
 			releases = append(releases, Release{
-				ID:          fmt.Sprintf("gh_%d", gh.ID),
-				Name:        project.Name,
-				Version:     gh.TagName,
-				Platform:    "github",
-				URL:         gh.HtmlUrl,
-				PublishedAt: pubTime,
-				Description: truncate(gh.Body, 200),
+				ID:           fmt.Sprintf("gh_%d", gh.ID),
+				Name:         project.Name,
+				Version:      gh.TagName,
+				Platform:     "github",
+				URL:          gh.HtmlUrl,
+				PublishedAt:  pubTime,
+				Description:  truncate(gh.Body, 200),
+				ReleaseNotes: gh.Body,
 			})
 		}
 	}
@@ -318,13 +321,14 @@ func fetchNPMVersions(project Project) []Release {
 		}
 
 		releases = append(releases, Release{
-			ID:          fmt.Sprintf("npm_%s", v),
-			Name:        project.Name,
-			Version:     v,
-			Platform:    "npm",
-			URL:         fmt.Sprintf("https://www.npmjs.com/package/%s/v/%s", pkgName, v),
-			PublishedAt: pubTime,
-			Description: "NPM Package Version",
+			ID:           fmt.Sprintf("npm_%s", v),
+			Name:         project.Name,
+			Version:      v,
+			Platform:     "npm",
+			URL:          fmt.Sprintf("https://www.npmjs.com/package/%s/v/%s", pkgName, v),
+			PublishedAt:  pubTime,
+			Description:  "NPM Package Version",
+			ReleaseNotes: "",
 		})
 	}
 
@@ -380,13 +384,14 @@ func fetchPyPIReleases(project Project) []Release {
 		}
 
 		releases = append(releases, Release{
-			ID:          fmt.Sprintf("pypi_%s", v),
-			Name:        project.Name,
-			Version:     v,
-			Platform:    "pypi",
-			URL:         fmt.Sprintf("https://pypi.org/project/%s/%s/", pkgName, v),
-			PublishedAt: pubTime,
-			Description: "PyPI Package Version",
+			ID:           fmt.Sprintf("pypi_%s", v),
+			Name:         project.Name,
+			Version:      v,
+			Platform:     "pypi",
+			URL:          fmt.Sprintf("https://pypi.org/project/%s/%s/", pkgName, v),
+			PublishedAt:  pubTime,
+			Description:  "PyPI Package Version",
+			ReleaseNotes: "",
 		})
 	}
 
@@ -433,13 +438,14 @@ func fetchDockerTags(project Project) []Release {
 	for _, tag := range dockerData.Results {
 		pubTime, _ := time.Parse(time.RFC3339, tag.LastPushed)
 		releases = append(releases, Release{
-			ID:          fmt.Sprintf("docker_%s", tag.Name),
-			Name:        project.Name,
-			Version:     tag.Name,
-			Platform:    "docker",
-			URL:         fmt.Sprintf("https://hub.docker.com/r/%s/tags", repo),
-			PublishedAt: pubTime,
-			Description: "Docker Image Tag",
+			ID:           fmt.Sprintf("docker_%s", tag.Name),
+			Name:         project.Name,
+			Version:      tag.Name,
+			Platform:     "docker",
+			URL:          fmt.Sprintf("https://hub.docker.com/r/%s/tags", repo),
+			PublishedAt:  pubTime,
+			Description:  "Docker Image Tag",
+			ReleaseNotes: "",
 		})
 	}
 
@@ -483,13 +489,14 @@ func fetchGitLabReleases(project Project) []Release {
 	for _, gl := range glReleases {
 		pubTime, _ := time.Parse(time.RFC3339, gl.CreatedAt)
 		releases = append(releases, Release{
-			ID:          fmt.Sprintf("gl_%s", gl.TagName),
-			Name:        project.Name,
-			Version:     gl.TagName,
-			Platform:    "gitlab",
-			URL:         gl.WebUrl,
-			PublishedAt: pubTime,
-			Description: truncate(gl.Description, 200),
+			ID:           fmt.Sprintf("gl_%s", gl.TagName),
+			Name:         project.Name,
+			Version:      gl.TagName,
+			Platform:     "gitlab",
+			URL:          gl.WebUrl,
+			PublishedAt:  pubTime,
+			Description:  truncate(gl.Description, 200),
+			ReleaseNotes: gl.Description,
 		})
 	}
 
