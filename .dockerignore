@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Build artifacts
+main
+newreleases
+*.o
+*.a
+
+# Test files
+*_test.go
+test_state.yaml
+
+# Documentation
+*.md
+TESTING.md
+TEST_SUITE.md
+TEST_SUMMARY.md
+TESTS_COMPLETE.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+go.sum.backup
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml

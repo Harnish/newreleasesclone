@@ -1,0 +1,28 @@
+version: '3.9'
+
+services:
+  newreleases:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: newreleases
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./state.yaml:/app/state.yaml
+      - ./data:/app/data
+    environment:
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - release-tracker
+
+networks:
+  release-tracker:
+    driver: bridge
