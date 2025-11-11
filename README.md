@@ -329,8 +329,146 @@ go build main.go
 ./newreleases 2>&1 | grep -E "^(✓|⚠|🚀)"
 ```
 
+## Containerization & Deployment
+
+### Docker
+
+Build and run with Docker:
+```bash
+# Build image
+docker build -t newreleases:latest .
+
+# Run container
+docker run -p 8080:8080 newreleases:latest
+
+# Or use the provided build script
+./build-docker.sh
+```
+
+See [DOCKER.md](DOCKER.md) for complete Docker setup guide.
+
+### Buildah/Podman
+
+Build OCI-compatible images with Buildah or Podman:
+```bash
+# Make script executable
+chmod +x build-podman.sh
+
+# Build with defaults
+./build-podman.sh
+
+# Build and push to registry
+./build-podman.sh newreleases latest docker.io/yourusername
+```
+
+See [BUILDAH_PODMAN.md](BUILDAH_PODMAN.md) for complete Buildah/Podman guide.
+
+### Docker-Compose
+
+Quick local development setup:
+```bash
+# Start all services
+docker-compose up
+
+# In background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+## CI/CD Pipelines
+
+### GitHub Actions
+
+Automated build and push to Docker Hub on every push:
+```bash
+# Configure secrets in GitHub:
+# - DOCKER_USERNAME
+# - DOCKER_TOKEN
+
+# Workflow file: .github/workflows/docker.yml
+# Automatically triggered on push/pull requests
+```
+
+See [.github/workflows/docker.yml](.github/workflows/docker.yml) for details.
+
+### GitLab CI/CD
+
+Comprehensive multi-stage pipeline with testing, building, and deployment:
+```bash
+# Configure variables in GitLab Settings > CI/CD:
+# - DOCKERHUB_USER (optional)
+# - DOCKERHUB_TOKEN (optional)
+# - STAGING_HOST, STAGING_USER, STAGING_PATH
+# - PRODUCTION_HOST, PRODUCTION_USER, PRODUCTION_PATH
+# - SSH_PRIVATE_KEY
+
+# Pipeline stages:
+# 1. Build: Buildah and Podman builds
+# 2. Test: Unit tests, linting, security scanning
+# 3. Push: Push to GitLab Registry and Docker Hub
+# 4. Deploy: Manual deployment to staging/production
+```
+
+**GitLab Pipeline Features**:
+- ✅ Build with Buildah (fast, efficient)
+- ✅ Build with Podman (Docker-compatible)
+- ✅ Run unit tests with coverage reporting
+- ✅ Lint with golangci-lint
+- ✅ Security scan with Trivy
+- ✅ Push to GitLab Registry automatically
+- ✅ Push to Docker Hub on tags (manual)
+- ✅ Deploy to staging/production (manual)
+- ✅ Create releases on tags
+
+See [.gitlab-ci.yml](.gitlab-ci.yml) for complete pipeline configuration.
+
+**Quick GitLab Setup**:
+1. Push project to GitLab
+2. Set CI/CD variables in **Settings > CI/CD > Variables**
+3. Pipeline runs automatically on push
+4. View pipeline in **CI/CD > Pipelines**
+
+**Running Deployments**:
+```
+# Manual deployment available via GitLab UI:
+1. Go to CI/CD > Pipelines
+2. Click on pipeline
+3. Find deploy_staging or deploy_production job
+4. Click "Play" button
+5. Watch logs in real-time
+```
+
+## Testing
+
+Run comprehensive test suite:
+```bash
+# Run all tests
+go test -v ./...
+
+# Run with race detection
+go test -v -race ./...
+
+# Generate coverage report
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+
+# Run specific test
+go test -v -run TestStoreAddProject ./...
+```
+
+See [TESTING.md](TESTING.md) for detailed testing documentation.
+
 ## Future Enhancements
 
+- [x] Docker image for easy deployment
+- [x] Buildah/Podman OCI image support
+- [x] GitHub Actions CI/CD pipeline
+- [x] GitLab CI/CD pipeline
 - [ ] API authentication and security
 - [ ] Release notes markdown rendering in UI
 - [ ] Notification system (email, Slack, Discord)
@@ -339,7 +477,6 @@ go build main.go
 - [ ] Configurable refresh intervals per project
 - [ ] Webhook support for external integrations
 - [ ] Database backend option (PostgreSQL, SQLite)
-- [ ] Docker image for easy deployment
 - [ ] Multiple users/teams support
 
 ## Contributing

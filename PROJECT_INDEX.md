@@ -2,20 +2,27 @@
 
 ## Project Status: ✅ PRODUCTION READY
 
-Complete implementation of the Release Tracker application with comprehensive testing, Docker setup, and full documentation.
+Complete implementation of the Release Tracker application with comprehensive testing, Docker/OCI setup, GitLab CI/CD, and full documentation.
 
 ## 📋 Quick Navigation
 
 ### 🚀 Getting Started
 - **README.md** - Project overview and features
 - **DOCKER_SETUP.md** - Docker quick start
+- **BUILDAH_PODMAN.md** - Buildah/Podman guide
 - **run_tests.sh** - Test automation
 
 ### 🏗️ Build & Deploy
 - **Dockerfile** - Production multi-stage build
 - **docker-compose.yml** - Local development
-- **build-docker.sh** - Automated build script
-- **.github/workflows/docker.yml** - CI/CD pipeline
+- **build-docker.sh** - Automated Docker build script
+- **build-podman.sh** - Automated Buildah/Podman build script
+
+### 🔄 CI/CD Pipelines
+- **.gitlab-ci.yml** - GitLab CI/CD pipeline (215 lines, 12 jobs, 4 stages)
+- **GITLAB_CI_CD.md** - Complete GitLab setup guide (450+ lines)
+- **GITLAB_CI_CD_SUMMARY.md** - Quick GitLab reference
+- **.github/workflows/docker.yml** - GitHub Actions workflow
 
 ### 🧪 Testing
 - **main_test.go** - 19 comprehensive tests
@@ -27,6 +34,7 @@ Complete implementation of the Release Tracker application with comprehensive te
 - **DOCKER.md** - Comprehensive Docker guide (400+ lines)
 - **DOCKER_SETUP.md** - Quick Docker reference
 - **DOCKER_COMPLETE.md** - Docker implementation summary
+- **BUILDAH_PODMAN.md** - Complete Buildah/Podman guide (450+ lines)
 - **COMPLETE.md** - Overall project summary
 - **TESTS_COMPLETE.md** - Test suite summary
 
@@ -53,12 +61,23 @@ Complete implementation of the Release Tracker application with comprehensive te
   - Performance benchmarks
   - 100% passing rate
 
-### Docker & Deployment
+### Docker & OCI Deployment
 - ✅ **Dockerfile** - Multi-stage build with integrated testing
 - ✅ **docker-compose.yml** - Local development environment
-- ✅ **build-docker.sh** - Automated build script
+- ✅ **build-docker.sh** - Automated Docker build script (4.4 KB)
+- ✅ **build-podman.sh** - Automated Buildah/Podman build script (6.8 KB)
 - ✅ **.dockerignore** - Build optimization
-- ✅ **.github/workflows/docker.yml** - CI/CD pipeline
+
+### CI/CD Pipelines
+- ✅ **.gitlab-ci.yml** - GitLab CI/CD (215 lines, 4 stages, 12 jobs)
+  - Parallel builds with Buildah & Podman
+  - Unit tests with coverage
+  - Code linting & security scanning
+  - Automatic registry push
+  - Manual deployment to staging/production
+- ✅ **GITLAB_CI_CD.md** - Complete GitLab setup guide (450+ lines)
+- ✅ **GITLAB_CI_CD_SUMMARY.md** - Quick GitLab reference
+- ✅ **.github/workflows/docker.yml** - GitHub Actions workflow
 
 ### Documentation
 - ✅ **10+ documentation files**
@@ -155,18 +174,25 @@ newreleases/
 │   ├── go.mod & go.sum
 │   └── state.yaml
 │
-├── Docker & Deployment
+├── Docker & OCI Deployment
 │   ├── Dockerfile
 │   ├── .dockerignore
 │   ├── docker-compose.yml
-│   ├── build-docker.sh
-│   └── .github/workflows/docker.yml
+│   ├── build-docker.sh (4.4 KB)
+│   └── build-podman.sh (6.8 KB)
+│
+├── CI/CD Pipelines
+│   ├── .gitlab-ci.yml (215 lines, 12 jobs)
+│   ├── .github/workflows/docker.yml
+│   ├── GITLAB_CI_CD.md (450+ lines)
+│   └── GITLAB_CI_CD_SUMMARY.md
 │
 ├── Documentation
-│   ├── README.md
-│   ├── DOCKER.md
+│   ├── README.md (515 lines)
+│   ├── DOCKER.md (400+ lines)
 │   ├── DOCKER_SETUP.md
 │   ├── DOCKER_COMPLETE.md
+│   ├── BUILDAH_PODMAN.md (450+ lines)
 │   ├── COMPLETE.md
 │   ├── TEST_SUITE.md
 │   ├── TESTING.md
