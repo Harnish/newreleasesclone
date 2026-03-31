@@ -47,7 +47,7 @@ type Store struct {
 	projects  map[string]Project
 	releases  map[string][]Release
 	refreshed map[string]time.Time // Track when each project was last refreshed
-	stateFile string                // Path to state.yaml for auto-save
+	stateFile string                // Path to state file (JSON format)
 }
 
 func NewStore() *Store {
@@ -55,15 +55,46 @@ func NewStore() *Store {
 		projects:  make(map[string]Project),
 		releases:  make(map[string][]Release),
 		refreshed: make(map[string]time.Time),
-		stateFile: "state.yaml",
+		stateFile: "state.json",
 	}
 }
 
 func (s *Store) AddProject(p Project) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.projects[p.ID] = p
-	go s.asyncSave() // Auto-save in background
+	// Initialize empty releases slice for this project to avoid YAML corruption
+	if _, exists := s.releases[p.ID]; !exists {
+		s.releases[p.ID] = []Release{}
+	}
+	s.mu.Unlock()
+	// Save synchronously to ensure project persists before any restart
+	if err := s.SaveState(s.stateFile); err != nil {
+		log.Printf("⚠ Failed to save state after AddProject: %v", err)
+	}
+}
+
+// DeleteProject removes a project and its releases from the store
+func (s *Store) DeleteProject(projectID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if _, exists := s.projects[projectID]; !exists {
+		return false
+	}
+	
+	// Delete project
+	delete(s.projects, projectID)
+	// Delete releases for this project
+	delete(s.releases, projectID)
+	// Delete refresh timestamp for this project
+	delete(s.refreshed, projectID)
+	
+	// Save changes synchronously
+	if err := s.SaveState(s.stateFile); err != nil {
+		log.Printf("⚠ Failed to save state after DeleteProject: %v", err)
+	}
+	
+	return true
 }
 
 func (s *Store) GetProjects() []Project {
@@ -78,40 +109,58 @@ func (s *Store) GetProjects() []Project {
 
 func (s *Store) AddRelease(projectID string, r Release) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.releases[projectID] = append([]Release{r}, s.releases[projectID]...)
-	if len(s.releases[projectID]) > 50 {
-		s.releases[projectID] = s.releases[projectID][:50]
+	if len(s.releases[projectID]) > 10 {
+		s.releases[projectID] = s.releases[projectID][:10]
 	}
-	go s.asyncSave() // Auto-save in background
+	s.mu.Unlock()
+	// Save synchronously to ensure releases persist before any restart
+	if err := s.SaveState(s.stateFile); err != nil {
+		log.Printf("⚠ Failed to save state after AddRelease: %v", err)
+	}
 }
 
 func (s *Store) GetReleases(projectID string) []Release {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.releases[projectID]
+	rs := make([]Release, len(s.releases[projectID]))
+	copy(rs, s.releases[projectID])
+	s.mu.RUnlock()
+	
+	// Sort by published date (newest first)
+	sort.Slice(rs, func(i, j int) bool {
+		return rs[i].PublishedAt.After(rs[j].PublishedAt)
+	})
+	return rs
 }
 
 func (s *Store) GetAllReleases() []Release {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	var all []Release
 	for _, rs := range s.releases {
 		all = append(all, rs...)
 	}
+	s.mu.RUnlock()
+	
+	// Sort by published date (newest first)
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].PublishedAt.After(all[j].PublishedAt)
+	})
 	return all
 }
 
 // MarkRefreshed marks a project as refreshed now
 func (s *Store) MarkRefreshed(projectID string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.refreshed[projectID] = time.Now()
 	p := s.projects[projectID]
 	p.LastRefresh = time.Now()
 	p.RefreshCount++
 	s.projects[projectID] = p
-	go s.asyncSave() // Auto-save in background
+	s.mu.Unlock()
+	// Save synchronously to ensure refresh tracking persists
+	if err := s.SaveState(s.stateFile); err != nil {
+		log.Printf("⚠ Failed to save state after MarkRefreshed: %v", err)
+	}
 }
 
 // IsStale checks if a project's data is older than 30 minutes
@@ -522,7 +571,10 @@ func (s *Store) SaveState(filename string) error {
 		Refreshed: s.refreshed,
 	}
 
-	data, err := yaml.Marshal(&state)
+	log.Printf("💾 Saving state: %d projects, %d releases entries", len(state.Projects), len(state.Releases))
+
+	// Use JSON instead of YAML to avoid marshaling issues with keys like "proj_xxx"
+	data, err := json.MarshalIndent(&state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
@@ -531,11 +583,11 @@ func (s *Store) SaveState(filename string) error {
 		return fmt.Errorf("failed to write state file: %w", err)
 	}
 
-	log.Printf("✓ State saved to %s", filename)
+	log.Printf("✓ State saved to %s (%d bytes)", filename, len(data))
 	return nil
 }
 
-// LoadState restores store state from state.yaml
+// LoadState restores store state from state file (JSON or YAML)
 func (s *Store) LoadState(filename string) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -546,13 +598,35 @@ func (s *Store) LoadState(filename string) error {
 		return fmt.Errorf("failed to read state file: %w", err)
 	}
 
+	log.Printf("📄 State file found (%d bytes), parsing...", len(data))
+
 	var state StateFile
-	if err := yaml.Unmarshal(data, &state); err != nil {
-		return fmt.Errorf("failed to unmarshal state: %w", err)
+	
+	// Try JSON first (new format)
+	err = json.Unmarshal(data, &state)
+	if err != nil {
+		// If JSON fails, try YAML (old format)
+		log.Printf("JSON parse failed, trying YAML...")
+		err = yaml.Unmarshal(data, &state)
+		if err != nil {
+			log.Printf("❌ Parse error: %v", err)
+			return fmt.Errorf("failed to unmarshal state: %w", err)
+		}
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Initialize empty maps if not present
+	if state.Projects == nil {
+		state.Projects = make(map[string]Project)
+	}
+	if state.Releases == nil {
+		state.Releases = make(map[string][]Release)
+	}
+	if state.Refreshed == nil {
+		state.Refreshed = make(map[string]time.Time)
+	}
 
 	s.projects = state.Projects
 	s.releases = state.Releases
@@ -580,8 +654,7 @@ func (s *Store) asyncSave() {
 
 var store = NewStore()
 
-var tmpl = template.Must(template.New("").Parse(`
-<!DOCTYPE html>
+var htmlTemplate = `<!DOCTYPE html>
 <html>
 <head>
     <title>Release Tracker</title>
@@ -705,6 +778,102 @@ var tmpl = template.Must(template.New("").Parse(`
             justify-content: space-between;
             align-items: center;
         }
+        .project-section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        .project-header {
+            padding: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            transition: background 0.2s;
+        }
+        .project-header:hover {
+            background: #334155;
+        }
+        .project-header.expanded {
+            background: #334155;
+            border-bottom: 1px solid #475569;
+        }
+        .project-info {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex: 1;
+        }
+        .project-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        .project-meta {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .expand-icon {
+            font-size: 1.5rem;
+            transition: transform 0.2s;
+            color: #60a5fa;
+        }
+        .expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+        .versions-list {
+            display: none;
+            background: #0f172a;
+        }
+        .versions-list.expanded {
+            display: block;
+        }
+        .version-item {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #334155;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .version-item:hover {
+            background: #1e293b;
+        }
+        .version-info {
+            flex: 1;
+        }
+        .version-number {
+            font-weight: 600;
+            color: #60a5fa;
+            font-size: 1rem;
+        }
+        .version-date {
+            color: #94a3b8;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+        .release-notes {
+            background: #0f172a;
+            color: #cbd5e1;
+            padding: 1rem;
+            border-left: 2px solid #3b82f6;
+            margin-top: 0.5rem;
+            border-radius: 4px;
+            line-height: 1.5;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .release-notes.expanded {
+            max-height: 500px;
+            overflow: auto;
+        }
     </style>
 </head>
 <body>
@@ -755,9 +924,49 @@ var tmpl = template.Must(template.New("").Parse(`
     </div>
 
     <script>
+        // Helper: calculate time since release (e.g., "2 days ago", "3 hours ago")
+        function timeSinceRelease(publishedAt) {
+            const now = new Date();
+            const published = new Date(publishedAt);
+            const diffMs = now - published;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 60) return diffMins + ' minutes ago';
+            if (diffHours < 24) return diffHours + ' hours ago';
+            if (diffDays < 30) return diffDays + ' days ago';
+            return new Date(publishedAt).toLocaleDateString();
+        }
+
+        // Toggle version details
+        function toggleVersion(element) {
+            const notes = element.querySelector('.release-notes');
+            if (notes) {
+                notes.classList.toggle('expanded');
+            }
+        }
+
+        // Toggle project section
+        function toggleProject(projectId) {
+            var header = document.querySelector('[data-project="' + projectId + '"]');
+            var versionsList = document.querySelector('#versions-' + projectId);
+            if (header && versionsList) {
+                header.classList.toggle('expanded');
+                document.querySelector('#icon-' + projectId).classList.toggle('expanded');
+                versionsList.classList.toggle('expanded');
+            }
+        }
+
         function showTab(tab) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            var tabs = document.querySelectorAll('.tab');
+            for (var i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
+            var contents = document.querySelectorAll('.tab-content');
+            for (var i = 0; i < contents.length; i++) {
+                contents[i].classList.remove('active');
+            }
             event.target.classList.add('active');
             document.getElementById(tab).classList.add('active');
             
@@ -765,119 +974,232 @@ var tmpl = template.Must(template.New("").Parse(`
             if (tab === 'projects') loadProjects();
         }
 
-        async function loadReleases() {
-            const res = await fetch('/api/releases');
-            const releases = await res.json();
-            const container = document.getElementById('releases-list');
-            
-            if (!releases || releases.length === 0) {
-                container.innerHTML = '<div class="empty-state"><h3>No releases yet</h3><p>Add projects to start tracking releases</p></div>';
-                return;
-            }
+        function loadReleases() {
+            fetch('/api/releases')
+                .then(function(res) { return res.json(); })
+                .then(function(allReleases) {
+                    return fetch('/api/projects')
+                        .then(function(res2) { return res2.json(); })
+                        .then(function(projects) {
+                            var container = document.getElementById('releases-list');
+                            
+                            if (!allReleases || allReleases.length === 0) {
+                                container.innerHTML = '<div class="empty-state"><h3>No releases yet</h3><p>Add projects to start tracking releases</p></div>';
+                                return;
+                            }
 
-            container.innerHTML = releases.map(r => ` + "`" + ` 
-                <div class="card">
-                    <div class="release-header">
-                        <div class="release-title">${r.name}</div>
-                        <div class="release-version">${r.version}</div>
-                    </div>
-                    <div class="release-meta">
-                        <span class="platform-badge">${r.platform}</span>
-                        <span>${new Date(r.published_at).toLocaleDateString()}</span>
-                    </div>
-                    <div class="release-desc">${r.description || 'No description available'}</div>
-                </div>
-            `+ "`" + `).join('');
+                            // Group releases by project
+                            var releasesByProject = {};
+                            for (var i = 0; i < allReleases.length; i++) {
+                                var r = allReleases[i];
+                                var projectId = 'unknown';
+                                for (var j = 0; j < projects.length; j++) {
+                                    if (projects[j].name === r.name) {
+                                        projectId = projects[j].id;
+                                        break;
+                                    }
+                                }
+                                if (!releasesByProject[projectId]) {
+                                    releasesByProject[projectId] = [];
+                                }
+                                releasesByProject[projectId].push(r);
+                            }
+
+                            // Render grouped view
+                            var html = '';
+                            for (var projectId in releasesByProject) {
+                                var project = null;
+                                for (var k = 0; k < projects.length; k++) {
+                                    if (projects[k].id === projectId) {
+                                        project = projects[k];
+                                        break;
+                                    }
+                                }
+                                var releases = releasesByProject[projectId];
+                                var projectName = project ? project.name : 'Unknown';
+                                var platformBadge = project ? project.platform : 'unknown';
+
+                                html += '<div class="project-section">' +
+                                    '<div class="project-header" data-project="' + projectId + '" onclick="toggleProject(\'' + projectId + '\')">' +
+                                        '<div class="project-info">' +
+                                            '<div class="project-name">' + projectName + '</div>' +
+                                            '<div class="project-meta">' +
+                                                '<span class="platform-badge">' + platformBadge + '</span>' +
+                                                '<span style="color: #94a3b8; font-size: 0.875rem;">' + releases.length + ' versions</span>' +
+                                            '</div>' +
+                                        '</div>' +
+                                        '<div class="expand-icon" id="icon-' + projectId + '">▼</div>' +
+                                    '</div>' +
+                                    '<div class="versions-list" id="versions-' + projectId + '">';
+                                
+                                for (var m = 0; m < releases.length; m++) {
+                                    var rel = releases[m];
+                                    html += '<div class="version-item" onclick="toggleVersion(this)">' +
+                                        '<div class="version-info">' +
+                                            '<div class="version-number">' + rel.version + '</div>' +
+                                            '<div class="version-date">' + timeSinceRelease(rel.published_at) + '</div>' +
+                                            '<div class="release-notes">' +
+                                                '<strong>Release Notes:</strong><br>' +
+                                                (rel.description || 'No description available') + '<br><br>' +
+                                                '<a href="' + rel.url + '" target="_blank" style="color: #60a5fa;">View on ' + platformBadge + '</a>' +
+                                            '</div>' +
+                                        '</div>' +
+                                    '</div>';
+                                }
+                                
+                                html += '</div></div>';
+                            }
+                            container.innerHTML = html;
+                        });
+                });
         }
 
-        async function loadProjects() {
-            const res = await fetch('/api/projects');
-            const projects = await res.json();
-            const container = document.getElementById('projects-list');
-            
-            if (!projects || projects.length === 0) {
-                container.innerHTML = '<div class="empty-state"><h3>No projects tracked</h3><p>Add your first project to get started</p></div>';
-                return;
-            }
+        function loadProjects() {
+            fetch('/api/projects')
+                .then(function(res) { return res.json(); })
+                .then(function(projects) {
+                    var container = document.getElementById('projects-list');
+                    
+                    if (!projects || projects.length === 0) {
+                        container.innerHTML = '<div class="empty-state"><h3>No projects tracked</h3><p>Add your first project to get started</p></div>';
+                        return;
+                    }
 
-            container.innerHTML = projects.map(p => ` + "`" + `
-                <div class="card project-card">
-                    <div style="flex: 1;">
-                        <div class="release-title">${p.name}</div>
-                        <div class="release-meta">
-                            <span class="platform-badge">${p.platform}</span>
-                        </div>
-                        <div class="release-meta" style="margin-top: 0.5rem; font-size: 0.75rem;">
-                            Last refreshed: ${p.last_refresh ? new Date(p.last_refresh).toLocaleString() : 'Never'}
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn" style="background: #10b981; padding: 0.5rem 1rem;" onclick="refreshProject('${p.id}', event)">Refresh</button>
-                        <a href="${p.repo_url}" target="_blank" class="btn">View</a>
-                    </div>
-                </div>
-            `+ "`" + `).join('');
+                    var html = '';
+                    for (var i = 0; i < projects.length; i++) {
+                        var p = projects[i];
+                        html += '<div class="card project-card">' +
+                            '<div style="flex: 1;">' +
+                                '<div class="release-title">' + p.name + '</div>' +
+                                '<div class="release-meta">' +
+                                    '<span class="platform-badge">' + p.platform + '</span>' +
+                                '</div>' +
+                                '<div class="release-meta" style="margin-top: 0.5rem; font-size: 0.75rem;">' +
+                                    'Last refreshed: ' + (p.last_refresh ? new Date(p.last_refresh).toLocaleString() : 'Never') +
+                                '</div>' +
+                            '</div>' +
+                            '<div style="display: flex; gap: 0.5rem;">' +
+                                '<button class="btn" style="background: #10b981; padding: 0.5rem 1rem;" onclick="refreshProject(\'' + p.id + '\', event)">Refresh</button>' +
+                                '<a href="' + p.repo_url + '" target="_blank" class="btn">View</a>' +
+                                '<button class="btn" style="background: #ef4444; padding: 0.5rem 1rem;" onclick="deleteProject(\'' + p.id + '\', \'' + p.name.replace(/'/g, "\\'") + '\', event)">Delete</button>' +
+                            '</div>' +
+                        '</div>';
+                    }
+                    container.innerHTML = html;
+                });
         }
 
-        async function refreshProject(projectId, event) {
+        function refreshProject(projectId, event) {
             event.preventDefault();
-            const res = await fetch('/api/refresh?id=' + projectId, { method: 'POST' });
-            if (res.ok) {
-                alert('Refreshing project...');
-                setTimeout(() => {
-                    loadProjects();
-                    loadReleases();
-                }, 500);
-            }
+            fetch('/api/refresh?id=' + projectId, { method: 'POST' })
+                .then(function(res) {
+                    if (res.ok) {
+                        alert('Refreshing project...');
+                        setTimeout(function() {
+                            loadProjects();
+                            loadReleases();
+                        }, 500);
+                    }
+                });
         }
 
-        document.getElementById('add-project-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = new FormData(e.target);
-            const data = Object.fromEntries(form);
+        function deleteProject(projectId, projectName, event) {
+            event.preventDefault();
+            if (!confirm('Are you sure you want to delete "' + projectName + '"? This cannot be undone.')) {
+                return;
+            }
             
-            await fetch('/api/projects', {
+            fetch('/api/projects?id=' + projectId, { method: 'DELETE' })
+                .then(function(res) {
+                    if (res.ok) {
+                        alert('Project deleted successfully!');
+                        loadProjects();
+                        loadReleases();
+                    } else {
+                        alert('Failed to delete project');
+                    }
+                })
+                .catch(function(err) {
+                    alert('Error deleting project: ' + err);
+                });
+        }
+
+        function handleAddProject(e) {
+            e.preventDefault();
+            var form = new FormData(e.target);
+            var data = {};
+            form.forEach(function(value, key) {
+                data[key] = value;
+            });
+            
+            fetch('/api/projects', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
+            }).then(function() {
+                e.target.reset();
+                alert('Project added successfully!');
+                setTimeout(function() {
+                    loadProjects();
+                    loadReleases();
+                }, 500);
             });
-            
-            e.target.reset();
-            alert('Project added successfully!');
-            setTimeout(() => {
-                loadProjects();
-                loadReleases();
-            }, 500);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var form = document.getElementById('add-project-form');
+            if (form) {
+                form.addEventListener('submit', handleAddProject);
+            }
         });
 
         // On page load: check for stale projects and refresh them
-        async function initializePage() {
-            const checkRes = await fetch('/api/refresh-check');
-            if (checkRes.ok) {
-                const checkData = await checkRes.json();
-                console.log('Auto-refreshed ' + checkData.refreshed_count + ' stale projects');
-            }
-            loadReleases();
-            loadProjects();
+        function initializePage() {
+            fetch('/api/refresh-check')
+                .then(function(checkRes) {
+                    if (checkRes.ok) {
+                        return checkRes.json();
+                    }
+                })
+                .then(function(checkData) {
+                    console.log('Auto-refreshed ' + checkData.refreshed_count + ' stale projects');
+                })
+                .then(function() {
+                    loadReleases();
+                    loadProjects();
+                });
         }
 
         initializePage();
     </script>
 </body>
 </html>
-`))
+`
+
+var tmpl = template.Must(template.New("").Parse(htmlTemplate))
 
 func main() {
+	fmt.Println("DEBUG: Starting Release Tracker...")
+	log.Println("🚀 Starting Release Tracker...")
+	
 	// Load state from disk, or seed with demo data if none exists
-	if err := store.LoadState("state.yaml"); err != nil {
-		log.Printf("⚠ Error loading state: %v", err)
+	fmt.Println("DEBUG: Loading state from state.json...")
+	log.Println("📂 Loading state from state.json...")
+	loadErr := store.LoadState("state.json")
+	if loadErr != nil {
+		log.Printf("⚠ Error loading state: %v", loadErr)
+		log.Println("⚠ Will seed demo data for any missing projects")
 	}
 
-	// If no projects loaded, seed with demo data
-	if len(store.GetProjects()) == 0 {
-		log.Println("No existing state found, seeding demo data...")
+	projects := store.GetProjects()
+	fmt.Printf("DEBUG: Found %d projects after LoadState\n", len(projects))
+	log.Printf("📊 Found %d projects after LoadState", len(projects))
+
+	// If fewer than 3 projects loaded, seed missing demo projects
+	if len(projects) < 3 {
+		log.Println("Seeding missing demo projects...")
 		seedDemoData()
-		store.SaveState("state.yaml")
+		store.SaveState("state.json")
 	}
 
 	http.HandleFunc("/", handleHome)
@@ -915,6 +1237,25 @@ func handleProjects(w http.ResponseWriter, r *http.Request) {
 		// Trigger immediate refresh on add
 		go store.RefreshProject(p.ID)
 		json.NewEncoder(w).Encode(p)
+		return
+	}
+
+	if r.Method == "DELETE" {
+		projectID := r.URL.Query().Get("id")
+		if projectID == "" {
+			http.Error(w, "Missing project id parameter", http.StatusBadRequest)
+			return
+		}
+		
+		if store.DeleteProject(projectID) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "deleted",
+				"id":     projectID,
+			})
+		} else {
+			http.Error(w, "Project not found", http.StatusNotFound)
+		}
 		return
 	}
 }
