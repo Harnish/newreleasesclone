@@ -214,7 +214,7 @@ body {
 .ver-link:hover { text-decoration: underline; }
 
 /* ---- Projects tab ---- */
-.proj-card {
+.proj-row {
     padding: 0.9rem 1.1rem;
     display: flex;
     justify-content: space-between;
@@ -226,6 +226,13 @@ body {
 .proj-card-meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.2rem; }
 .proj-card-sub { color: #64748b; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
 .proj-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+.webhook-panel { border-top: 1px solid #334155; padding: 0.75rem 1.1rem; background: #0f172a; }
+.webhook-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid #1a2535; }
+.webhook-item:last-child { border-bottom: none; }
+.webhook-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; color: #94a3b8; }
+.webhook-add { display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; align-items: center; }
+.webhook-input { padding: 0.4rem 0.6rem; background: #1e293b; border: 1px solid #334155; border-radius: 4px; color: #e2e8f0; font-size: 0.8rem; }
+.webhook-input:focus { outline: none; border-color: #3b82f6; }
 
 /* ---- Buttons ---- */
 .btn {
@@ -603,20 +610,24 @@ function buildProjectsHTML(projects) {
     }
     return projects.map(function(p) {
         var sub = p.last_refresh ? 'Refreshed ' + fmtAge(p.last_refresh) : 'Never refreshed';
-        return '<div class="card proj-card">' +
-            '<div class="proj-card-info">' +
-                '<div class="proj-card-name">' + esc(p.name) + '</div>' +
-                '<div class="proj-card-meta">' +
-                    '<span class="badge ' + esc(p.platform) + '">' + esc(p.platform) + '</span>' +
-                    '<span style="color:#64748b;font-size:0.75rem">' + sub + '</span>' +
+        return '<div class="card" id="projcard-' + esc(p.id) + '">' +
+            '<div class="proj-row">' +
+                '<div class="proj-card-info">' +
+                    '<div class="proj-card-name">' + esc(p.name) + '</div>' +
+                    '<div class="proj-card-meta">' +
+                        '<span class="badge ' + esc(p.platform) + '">' + esc(p.platform) + '</span>' +
+                        '<span style="color:#64748b;font-size:0.75rem">' + sub + '</span>' +
+                    '</div>' +
+                    '<div class="proj-card-sub">' + esc(p.repo_url) + '</div>' +
                 '</div>' +
-                '<div class="proj-card-sub">' + esc(p.repo_url) + '</div>' +
+                '<div class="proj-card-actions">' +
+                    '<a href="' + esc(p.repo_url) + '" target="_blank" class="btn btn-outline">View</a>' +
+                    '<button class="btn btn-green" data-id="' + esc(p.id) + '" onclick="doRefresh(this)">Refresh</button>' +
+                    '<button class="btn btn-outline" data-id="' + esc(p.id) + '" id="whbtn-' + esc(p.id) + '" onclick="toggleWebhooks(this)">Webhooks</button>' +
+                    '<button class="btn btn-red" data-id="' + esc(p.id) + '" data-name="' + esc(p.name) + '" onclick="doDelete(this)">Delete</button>' +
+                '</div>' +
             '</div>' +
-            '<div class="proj-card-actions">' +
-                '<a href="' + esc(p.repo_url) + '" target="_blank" class="btn btn-outline">View</a>' +
-                '<button class="btn btn-green" data-id="' + esc(p.id) + '" onclick="doRefresh(this)">Refresh</button>' +
-                '<button class="btn btn-red"   data-id="' + esc(p.id) + '" data-name="' + esc(p.name) + '" onclick="doDelete(this)">Delete</button>' +
-            '</div>' +
+            '<div class="webhook-panel" id="whpanel-' + esc(p.id) + '" style="display:none"></div>' +
         '</div>';
     }).join('');
 }
@@ -675,6 +686,73 @@ function doDelete(btn) {
         .catch(function(err) {
             toast('Error: ' + err, 'err');
             btn.disabled = false; btn.textContent = 'Delete';
+        });
+}
+
+// ---- Webhooks ----
+function toggleWebhooks(btn) {
+    var id = btn.dataset.id;
+    var panel = document.getElementById('whpanel-' + id);
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        btn.style.color = '#60a5fa';
+        loadWebhooks(id);
+    } else {
+        panel.style.display = 'none';
+        btn.style.color = '';
+    }
+}
+
+function loadWebhooks(repoID) {
+    var panel = document.getElementById('whpanel-' + repoID);
+    if (!panel) return;
+    panel.innerHTML = '<div style="font-size:0.8rem;color:#475569;padding:0.25rem 0">Loading...</div>';
+    fetch('/api/webhooks?repo_id=' + encodeURIComponent(repoID))
+        .then(function(r) { return r.json(); })
+        .then(function(hooks) { panel.innerHTML = renderWebhookPanel(repoID, hooks || []); })
+        .catch(function() { panel.innerHTML = '<div style="color:#f87171;font-size:0.8rem">Failed to load webhooks.</div>'; });
+}
+
+function renderWebhookPanel(repoID, hooks) {
+    var list = hooks.length ? hooks.map(function(h) {
+        var label = h.has_secret ? ' <span style="color:#64748b;font-size:0.7rem">[signed]</span>' : '';
+        return '<div class="webhook-item">' +
+            '<span class="webhook-url">' + esc(h.url) + label + '</span>' +
+            '<button class="btn btn-ghost" style="color:#f87171;font-size:0.75rem;padding:0.2rem 0.5rem" ' +
+                'data-wid="' + esc(h.id) + '" data-repo="' + esc(repoID) + '" onclick="doDeleteWebhook(this)">Remove</button>' +
+        '</div>';
+    }).join('') : '<div style="font-size:0.8rem;color:#475569;padding:0.25rem 0 0.5rem">No webhooks configured.</div>';
+
+    return '<div>' + list + '</div>' +
+        '<form class="webhook-add" onsubmit="doAddWebhook(event,\'' + esc(repoID) + '\')">' +
+            '<input class="webhook-input" type="url" name="url" required placeholder="https://your-endpoint.com/webhook" style="flex:1;min-width:180px">' +
+            '<input class="webhook-input" type="text" name="secret" placeholder="Secret (optional)" style="width:150px">' +
+            '<button type="submit" class="btn btn-primary" style="font-size:0.78rem">Add</button>' +
+        '</form>';
+}
+
+function doAddWebhook(e, repoID) {
+    e.preventDefault();
+    var data = {repo_id: repoID};
+    new FormData(e.target).forEach(function(v, k) { if (v) data[k] = v; });
+    fetch('/api/webhooks', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
+        e.target.reset();
+        loadWebhooks(repoID);
+        toast('Webhook added.', 'ok');
+    }).catch(function(err) { toast('Error: ' + err, 'err'); });
+}
+
+function doDeleteWebhook(btn) {
+    var wid = btn.dataset.wid;
+    var repoID = btn.dataset.repo;
+    fetch('/api/webhooks?id=' + encodeURIComponent(wid), {method: 'DELETE'})
+        .then(function(r) {
+            if (r.ok) { loadWebhooks(repoID); toast('Webhook removed.'); }
         });
 }
 

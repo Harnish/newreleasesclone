@@ -190,6 +190,56 @@ func handleRefreshCheck(w http.ResponseWriter, r *http.Request, userID string) {
 	})
 }
 
+// /api/webhooks — GET list for a repo, POST add, DELETE remove.
+func handleWebhooks(w http.ResponseWriter, r *http.Request, userID string) {
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case http.MethodGet:
+		repoID := r.URL.Query().Get("repo_id")
+		if repoID == "" {
+			http.Error(w, "missing repo_id", http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode(store.GetUserWebhooksForRepo(userID, repoID))
+
+	case http.MethodPost:
+		var req struct {
+			RepoID string `json:"repo_id"`
+			URL    string `json:"url"`
+			Secret string `json:"secret"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RepoID == "" || req.URL == "" {
+			http.Error(w, "repo_id and url are required", http.StatusBadRequest)
+			return
+		}
+		if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+			http.Error(w, "url must start with http:// or https://", http.StatusBadRequest)
+			return
+		}
+		id, err := store.AddWebhook(userID, req.RepoID, req.URL, req.Secret)
+		if err != nil {
+			http.Error(w, "failed to add webhook", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"id": id})
+
+	case http.MethodDelete:
+		whID := r.URL.Query().Get("id")
+		if whID == "" {
+			http.Error(w, "missing id", http.StatusBadRequest)
+			return
+		}
+		if store.DeleteWebhook(userID, whID) {
+			json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+		} else {
+			http.Error(w, "webhook not found", http.StatusNotFound)
+		}
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // GET /api/push/vapid-key — returns the VAPID public key for subscription setup.
 func handlePushVapidKey(w http.ResponseWriter, r *http.Request, userID string) {
 	w.Header().Set("Content-Type", "application/json")

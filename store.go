@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -150,6 +154,24 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 4 {
+		if _, err := db.Exec(`
+			CREATE TABLE IF NOT EXISTS webhooks (
+				id         TEXT PRIMARY KEY,
+				user_id    TEXT NOT NULL REFERENCES users(id),
+				repo_id    TEXT NOT NULL REFERENCES repos(id),
+				url        TEXT NOT NULL,
+				secret     TEXT NOT NULL DEFAULT '',
+				created_at TEXT NOT NULL DEFAULT ''
+			);
+		`); err != nil {
+			return fmt.Errorf("failed to migrate to v4: %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 4"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -242,6 +264,133 @@ func (s *Store) sendPushNotifications(repoID, projectName string, newReleases []
 		if resp.StatusCode == 410 || resp.StatusCode == 404 {
 			s.DeletePushSubscription(sub.UserID, sub.Endpoint)
 		}
+	}
+}
+
+// ---- Webhooks ----
+
+func (s *Store) AddWebhook(userID, repoID, webhookURL, secret string) (string, error) {
+	id := fmt.Sprintf("wh_%s", generateToken()[:12])
+	_, err := s.db.Exec(`
+		INSERT INTO webhooks (id, user_id, repo_id, url, secret, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		id, userID, repoID, webhookURL, secret, time.Now().Format(time.RFC3339))
+	return id, err
+}
+
+func (s *Store) DeleteWebhook(userID, webhookID string) bool {
+	res, err := s.db.Exec(`DELETE FROM webhooks WHERE id = ? AND user_id = ?`, webhookID, userID)
+	if err != nil {
+		return false
+	}
+	n, _ := res.RowsAffected()
+	return n > 0
+}
+
+func (s *Store) GetUserWebhooksForRepo(userID, repoID string) []Webhook {
+	rows, err := s.db.Query(`
+		SELECT id, repo_id, url, secret FROM webhooks
+		WHERE user_id = ? AND repo_id = ? ORDER BY created_at ASC`, userID, repoID)
+	if err != nil {
+		return []Webhook{}
+	}
+	defer rows.Close()
+	return scanWebhooks(rows)
+}
+
+func (s *Store) getWebhooksForRepo(repoID string) []struct {
+	wh     Webhook
+	secret string
+} {
+	rows, err := s.db.Query(`SELECT id, repo_id, url, secret FROM webhooks WHERE repo_id = ?`, repoID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var results []struct {
+		wh     Webhook
+		secret string
+	}
+	for rows.Next() {
+		var id, rid, u, sec string
+		if err := rows.Scan(&id, &rid, &u, &sec); err != nil {
+			continue
+		}
+		results = append(results, struct {
+			wh     Webhook
+			secret string
+		}{Webhook{ID: id, RepoID: rid, URL: u, HasSecret: sec != ""}, sec})
+	}
+	return results
+}
+
+func scanWebhooks(rows *sql.Rows) []Webhook {
+	var hooks []Webhook
+	for rows.Next() {
+		var id, repoID, u, secret string
+		if err := rows.Scan(&id, &repoID, &u, &secret); err != nil {
+			continue
+		}
+		hooks = append(hooks, Webhook{ID: id, RepoID: repoID, URL: u, HasSecret: secret != ""})
+	}
+	if hooks == nil {
+		return []Webhook{}
+	}
+	return hooks
+}
+
+func (s *Store) sendWebhooks(repoID string, project Project, newReleases []Release) {
+	hooks := s.getWebhooksForRepo(repoID)
+	if len(hooks) == 0 {
+		return
+	}
+
+	type releasePayload struct {
+		Version     string `json:"version"`
+		URL         string `json:"url"`
+		PublishedAt string `json:"published_at"`
+		Description string `json:"description,omitempty"`
+	}
+	relPayloads := make([]releasePayload, len(newReleases))
+	for i, r := range newReleases {
+		relPayloads[i] = releasePayload{
+			Version:     r.Version,
+			URL:         r.URL,
+			PublishedAt: r.PublishedAt.Format(time.RFC3339),
+			Description: r.Description,
+		}
+	}
+	body, _ := json.Marshal(map[string]interface{}{
+		"project": map[string]string{
+			"id":       project.ID,
+			"name":     project.Name,
+			"platform": project.Platform,
+			"repo_url": project.RepoURL,
+		},
+		"releases": relPayloads,
+	})
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	for _, entry := range hooks {
+		req, err := http.NewRequest(http.MethodPost, entry.wh.URL, bytes.NewReader(body))
+		if err != nil {
+			log.Printf("⚠ Webhook bad URL %s: %v", entry.wh.URL, err)
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "release-tracker/1.0")
+		if entry.secret != "" {
+			mac := hmac.New(sha256.New, []byte(entry.secret))
+			mac.Write(body)
+			req.Header.Set("X-Signature-256", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("⚠ Webhook delivery failed %s: %v", entry.wh.URL, err)
+			continue
+		}
+		resp.Body.Close()
+		log.Printf("✓ Webhook delivered to %s (status %d)", entry.wh.URL, resp.StatusCode)
 	}
 }
 
@@ -636,6 +785,7 @@ func (s *Store) RefreshProject(repoID string) {
 		}
 		if len(newReleases) > 0 {
 			go s.sendPushNotifications(repoID, project.Name, newReleases)
+			go s.sendWebhooks(repoID, project, newReleases)
 		}
 	}
 }

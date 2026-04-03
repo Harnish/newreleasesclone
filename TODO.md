@@ -3,7 +3,6 @@
 ## In Progress
 
 ## Planned
-- [ ] **Webhooks** — per-project outbound webhook URLs; HMAC-SHA256 signed POST payload on new release
 - [ ] **Add Project side panel** — move the Add Project form to a slide-in panel on the right side of the Releases page (eliminate the Projects tab)
 - [ ] **Limit releases per project** — show only the 5 most recent releases per project card, with a "more" expand link, list the releases on the same line
 - [ ] **Inline project controls** — add Refresh and Delete buttons directly on the project headers in the Releases view, like an X to delete and an options button to set webhooks, push notifications, email.
@@ -24,6 +23,7 @@
 - [x] **Smart URL autofill** — platform-aware input: `owner/repo` for GitHub/GitLab, package name for npm/PyPI, image name for Docker; auto-fills display name
 - [x] **Other / Custom URL** — paste any supported URL; platform auto-detected with live feedback, name auto-filled
 - [x] **Browser push notifications** — VAPID keys auto-generated and persisted; service worker at `/sw.js`; 🔔 button in header; notifies all subscribed users when a new release is detected on refresh
+- [x] **Webhooks** — per-project webhook URLs with optional HMAC-SHA256 secret; managed inline from the Projects tab; fired alongside push notifications on new releases
 - [x] Split monolith `main.go` into focused files (`handlers.go`, `store.go`, `fetchers.go`, `models.go`, `ui.go`)
 - [x] Migrate state storage from JSON/YAML to SQLite (WAL mode, `modernc.org/sqlite`)
 - [x] Fix delete bug (was re-seeding on restart, wiping unrelated projects)

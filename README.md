@@ -9,6 +9,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, and Docker Hub. Multi-
 - **Shared release data**: Two users adding the same repo share one set of fetched releases
 - **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
 - **Browser push notifications**: Click 🔔 in the header to subscribe; notifications fire when a new release is detected on any tracked repo
+- **Webhooks**: Per-project outbound webhooks with optional HMAC-SHA256 signing; managed inline from the Projects tab
 - **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
 - **Full release notes**: GitHub/GitLab release bodies captured and expandable in the UI
 - **SQLite persistence**: All data stored in `data/newreleases.db`
@@ -44,6 +45,9 @@ All data endpoints require a valid session cookie (set by `/api/login` or `/api/
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `GET` | `/api/webhooks?repo_id=<id>` | List webhooks for a project |
+| `POST` | `/api/webhooks` | Add webhook `{repo_id, url, secret?}` |
+| `DELETE` | `/api/webhooks?id=<id>` | Remove a webhook |
 | `GET` | `/api/push/vapid-key` | VAPID public key for subscription |
 | `POST` | `/api/push/subscribe` | Save push subscription `{endpoint, keys}` |
 | `DELETE` | `/api/push/subscribe` | Remove push subscription `{endpoint}` |
