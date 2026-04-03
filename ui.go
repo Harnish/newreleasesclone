@@ -326,6 +326,7 @@ body {
     <span class="app-title">Release Tracker</span>
     <div class="user-info">
         <span class="username" id="username-display"></span>
+        <button class="btn btn-ghost" id="notif-btn" onclick="toggleNotifications()" title="Enable push notifications" style="font-size:1rem;padding:0.3rem 0.5rem">&#x1F514;</button>
         <button class="btn btn-ghost" onclick="doLogout()">Sign out</button>
     </div>
 </header>
@@ -486,6 +487,7 @@ function showApp() {
     document.getElementById('app-page').style.display = '';
     document.getElementById('username-display').textContent = currentUser.username;
     fetch('/api/refresh-check').catch(function() {});
+    initNotifications();
     loadReleases();
     loadProjects();
 }
@@ -846,6 +848,105 @@ document.getElementById('add-form').addEventListener('submit', function(e) {
         btn.disabled = false; btn.textContent = 'Add Project';
     });
 });
+
+// ---- Push notifications ----
+var _pushSub = null;
+
+function urlBase64ToUint8Array(b64) {
+    var pad = '='.repeat((4 - b64.length % 4) % 4);
+    var base64 = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = atob(base64);
+    var arr = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+}
+
+function updateNotifBtn() {
+    var btn = document.getElementById('notif-btn');
+    if (!btn) return;
+    var denied = Notification.permission === 'denied';
+    if (denied) {
+        btn.title = 'Notifications blocked — check browser site settings';
+        btn.style.opacity = '0.35';
+    } else if (_pushSub) {
+        btn.title = 'Push notifications on — click to disable';
+        btn.style.opacity = '1';
+        btn.style.color = '#fbbf24';
+    } else {
+        btn.title = 'Enable push notifications';
+        btn.style.opacity = '0.6';
+        btn.style.color = '';
+    }
+}
+
+function initNotifications() {
+    var btn = document.getElementById('notif-btn');
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        if (btn) btn.style.display = 'none';
+        return;
+    }
+    navigator.serviceWorker.register('/sw.js').then(function(reg) {
+        return reg.pushManager.getSubscription();
+    }).then(function(sub) {
+        _pushSub = sub;
+        updateNotifBtn();
+    }).catch(function(err) {
+        console.warn('SW init failed:', err);
+        if (btn) btn.style.display = 'none';
+    });
+}
+
+function toggleNotifications() {
+    if (Notification.permission === 'denied') {
+        toast('Notifications are blocked. Enable them in your browser site settings.', 'err');
+        return;
+    }
+    if (_pushSub) {
+        var endpoint = _pushSub.endpoint;
+        _pushSub.unsubscribe().then(function() {
+            _pushSub = null;
+            return fetch('/api/push/subscribe', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({endpoint: endpoint})
+            });
+        }).then(function() {
+            updateNotifBtn();
+            toast('Push notifications disabled.', 'inf');
+        }).catch(function(err) {
+            toast('Error: ' + err, 'err');
+        });
+        return;
+    }
+    Notification.requestPermission().then(function(perm) {
+        if (perm !== 'granted') {
+            updateNotifBtn();
+            toast('Notification permission denied.', 'err');
+            return;
+        }
+        fetch('/api/push/vapid-key').then(function(r) { return r.json(); }).then(function(data) {
+            return navigator.serviceWorker.ready.then(function(reg) {
+                return reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(data.publicKey)
+                });
+            });
+        }).then(function(sub) {
+            _pushSub = sub;
+            var j = sub.toJSON();
+            return fetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({endpoint: j.endpoint, keys: j.keys})
+            });
+        }).then(function() {
+            updateNotifBtn();
+            toast('Push notifications enabled!', 'ok');
+        }).catch(function(err) {
+            toast('Failed to enable notifications: ' + err, 'err');
+        });
+    });
+}
 
 // ---- Boot ----
 onPlatformChange();

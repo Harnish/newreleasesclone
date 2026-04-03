@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	log.Println("🚀 Starting Release Tracker...")
+	log.Println("Starting Release Tracker...")
 
 	var err error
 	store, err = NewStore("data/newreleases.db")
@@ -15,33 +15,19 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	projects := store.GetProjects()
-	log.Printf("📊 Found %d projects in database", len(projects))
-
-	if len(projects) == 0 {
-		log.Println("Empty database — seeding demo projects...")
-		seedDemoData()
-	}
-
 	http.HandleFunc("/", handleHome)
-	http.HandleFunc("/api/projects", handleProjects)
-	http.HandleFunc("/api/releases", handleReleases)
-	http.HandleFunc("/api/refresh-check", handleRefreshCheck)
-	http.HandleFunc("/api/refresh", handleRefreshProject)
+	http.HandleFunc("/sw.js", handleServiceWorker)
+	http.HandleFunc("/api/me", requireAuth(handleMe))
+	http.HandleFunc("/api/register", handleRegister)
+	http.HandleFunc("/api/login", handleLogin)
+	http.HandleFunc("/api/logout", handleLogout)
+	http.HandleFunc("/api/projects", requireAuth(handleProjects))
+	http.HandleFunc("/api/releases", requireAuth(handleReleases))
+	http.HandleFunc("/api/refresh-check", requireAuth(handleRefreshCheck))
+	http.HandleFunc("/api/refresh", requireAuth(handleRefreshProject))
+	http.HandleFunc("/api/push/vapid-key", requireAuth(handlePushVapidKey))
+	http.HandleFunc("/api/push/subscribe", requireAuth(handlePushSubscribe))
 
-	fmt.Println("🚀 Release Tracker running on http://localhost:8080")
+	fmt.Println("Release Tracker running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
-}
-
-func seedDemoData() {
-	projects := []Project{
-		{ID: "1", Name: "kubernetes", Platform: "github", RepoURL: "https://github.com/kubernetes/kubernetes"},
-		{ID: "2", Name: "react", Platform: "npm", RepoURL: "https://github.com/facebook/react"},
-		{ID: "3", Name: "golang", Platform: "github", RepoURL: "https://github.com/golang/go"},
-	}
-	for _, p := range projects {
-		store.AddProject(p)
-		go store.RefreshProject(p.ID)
-	}
-	log.Println("📦 Seeding projects with live API data...")
 }

@@ -7,7 +7,8 @@ Track software releases across GitHub, GitLab, NPM, PyPI, and Docker Hub. Multi-
 - **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub
 - **User accounts**: Register/login with session-based auth; each user tracks their own set of projects
 - **Shared release data**: Two users adding the same repo share one set of fetched releases
-- **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm)
+- **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
+- **Browser push notifications**: Click 🔔 in the header to subscribe; notifications fire when a new release is detected on any tracked repo
 - **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
 - **Full release notes**: GitHub/GitLab release bodies captured and expandable in the UI
 - **SQLite persistence**: All data stored in `data/newreleases.db`
@@ -42,6 +43,12 @@ Full URLs are also accepted for GitHub and GitLab in their dedicated fields. The
 All data endpoints require a valid session cookie (set by `/api/login` or `/api/register`).
 
 | Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/push/vapid-key` | VAPID public key for subscription |
+| `POST` | `/api/push/subscribe` | Save push subscription `{endpoint, keys}` |
+| `DELETE` | `/api/push/subscribe` | Remove push subscription `{endpoint}` |
+
+
 |--------|------|-------------|
 | `POST` | `/api/register` | Create account |
 | `POST` | `/api/login` | Sign in |
