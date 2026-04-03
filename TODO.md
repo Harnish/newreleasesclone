@@ -3,7 +3,7 @@
 ## In Progress
 
 ## Planned
-- [ ] **Add Project side panel** — move the Add Project form to a slide-in panel on the right side of the Releases page (eliminate the Projects tab)
+- [x] **Add Project side panel** — move the Add Project form to a slide-in panel on the right side of the Releases page (eliminate the Projects tab)
 - [ ] **Limit releases per project** — show only the 5 most recent releases per project card, with a "more" expand link, list the releases on the same line
 - [ ] **Inline project controls** — add Refresh and Delete buttons directly on the project headers in the Releases view, like an X to delete and an options button to set webhooks, push notifications, email.
 - [ ] **Email validation of users** - send an email and a verification link to the user to validate their email

@@ -109,29 +109,48 @@ body {
 .toast.err { background: #3b0000; color: #f87171; border: 1px solid #7f1d1d; }
 .toast.inf { background: #172554; color: #93c5fd; border: 1px solid #1e3a8a; }
 
-/* ---- Tabs ---- */
-.tabs {
-    background: #1e293b;
-    border-bottom: 1px solid #334155;
-    display: flex;
-    padding: 0 1.5rem;
-}
-.tab-btn {
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: #94a3b8;
-    cursor: pointer;
-    font-size: 0.875rem;
-    padding: 0.8rem 1.1rem;
-    transition: color 0.15s, border-color 0.15s;
-}
-.tab-btn:hover { color: #e2e8f0; }
-.tab-btn.active { color: #60a5fa; border-bottom-color: #60a5fa; }
-
 .content { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
-.panel { display: none; }
-.panel.active { display: block; }
+
+/* ---- Releases header row ---- */
+.releases-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+.releases-title { font-size: 0.9rem; font-weight: 600; color: #94a3b8; }
+
+/* ---- Releases area (list + slide panel) ---- */
+.releases-area {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+}
+#releases-root { flex: 1; min-width: 0; }
+
+/* ---- Slide-over add panel ---- */
+.add-panel {
+    max-width: 0;
+    overflow: hidden;
+    transition: max-width 0.25s ease;
+    flex-shrink: 0;
+}
+.add-panel.open { max-width: 300px; }
+.add-panel-inner {
+    width: 280px;
+    background: #1a2840;
+    border-left: 1px solid #2d4a6e;
+    padding: 1.1rem 1rem;
+    min-height: 100%;
+}
+.add-panel-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 1.1rem;
+}
 
 /* ---- Cards ---- */
 .card {
@@ -272,8 +291,6 @@ body {
 .form-group input:focus, .form-group select:focus { outline: none; border-color: #3b82f6; }
 .form-group select option { background: #0f172a; }
 
-.add-form-card { padding: 1.25rem; max-width: 480px; }
-.add-form-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; }
 
 /* ---- Misc ---- */
 .empty { text-align: center; padding: 4rem 2rem; color: #475569; }
@@ -340,45 +357,43 @@ body {
 
 <div id="toast" class="toast"></div>
 
-<nav class="tabs">
-    <button class="tab-btn active" data-tab="releases">Releases</button>
-    <button class="tab-btn" data-tab="projects">Projects</button>
-    <button class="tab-btn" data-tab="add">+ Add Project</button>
-</nav>
-
 <div class="content">
-    <div id="panel-releases" class="panel active">
+    <div class="releases-header">
+        <span class="releases-title">Projects</span>
+        <button class="btn btn-primary" onclick="toggleAddPanel()">+ Add Project</button>
+    </div>
+    <div class="releases-area">
         <div id="releases-root"><div class="loading">Loading...</div></div>
-    </div>
-    <div id="panel-projects" class="panel">
-        <div id="projects-root"><div class="loading">Loading...</div></div>
-    </div>
-    <div id="panel-add" class="panel">
-        <div class="card add-form-card">
-            <div class="add-form-title">Add New Project</div>
-            <form id="add-form">
-                <div class="form-group">
-                    <label>Platform</label>
-                    <select name="platform" id="add-platform" required onchange="onPlatformChange()">
-                        <option value="github">GitHub</option>
-                        <option value="gitlab">GitLab</option>
-                        <option value="npm">NPM</option>
-                        <option value="pypi">PyPI</option>
-                        <option value="docker">Docker Hub</option>
-                        <option value="other">Other / Custom URL</option>
-                    </select>
+        <div id="add-panel" class="add-panel">
+            <div class="add-panel-inner">
+                <div class="add-panel-title">
+                    Add Project
+                    <button class="btn btn-ghost" onclick="closeAddPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
                 </div>
-                <div class="form-group">
-                    <label id="add-repo-label">Repository</label>
-                    <input type="text" name="repo_url" id="add-repo-url" required placeholder="owner/repo" oninput="autoFillName()">
-                    <span id="add-repo-hint" style="display:block;font-size:0.74rem;color:#475569;margin-top:0.3rem"></span>
-                </div>
-                <div class="form-group">
-                    <label>Display name</label>
-                    <input type="text" name="name" id="add-name" required placeholder="e.g., kubernetes">
-                </div>
-                <button type="submit" class="btn btn-primary" id="add-btn">Add Project</button>
-            </form>
+                <form id="add-form">
+                    <div class="form-group">
+                        <label>Platform</label>
+                        <select name="platform" id="add-platform" required onchange="onPlatformChange()">
+                            <option value="github">GitHub</option>
+                            <option value="gitlab">GitLab</option>
+                            <option value="npm">NPM</option>
+                            <option value="pypi">PyPI</option>
+                            <option value="docker">Docker Hub</option>
+                            <option value="other">Other / Custom URL</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label id="add-repo-label">Repository</label>
+                        <input type="text" name="repo_url" id="add-repo-url" required placeholder="owner/repo" oninput="autoFillName()">
+                        <span id="add-repo-hint" style="display:block;font-size:0.74rem;color:#475569;margin-top:0.3rem"></span>
+                    </div>
+                    <div class="form-group">
+                        <label>Display name</label>
+                        <input type="text" name="name" id="add-name" required placeholder="e.g., kubernetes">
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="add-btn" style="width:100%">Add Project</button>
+                </form>
+            </div>
         </div>
     </div>
 </div>
@@ -496,7 +511,6 @@ function showApp() {
     fetch('/api/refresh-check').catch(function() {});
     initNotifications();
     loadReleases();
-    loadProjects();
 }
 
 function init() {
@@ -515,16 +529,18 @@ function init() {
         });
 }
 
-// ---- Tabs ----
-document.querySelectorAll('.tab-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
-        document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
-        btn.classList.add('active');
-        document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-        if (btn.dataset.tab === 'releases') loadReleases();
-        if (btn.dataset.tab === 'projects') loadProjects();
-    });
+// ---- Add panel ----
+function toggleAddPanel() {
+    var panel = document.getElementById('add-panel');
+    panel.classList.toggle('open');
+}
+
+function closeAddPanel() {
+    document.getElementById('add-panel').classList.remove('open');
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeAddPanel();
 });
 
 // ---- Releases tab ----
@@ -654,7 +670,7 @@ function doRefresh(btn) {
         .then(function(r) {
             if (r.ok) {
                 toast('Refresh queued — data updates shortly.', 'inf');
-                setTimeout(function() { loadProjects(); loadReleases(); }, 2000);
+                setTimeout(function() { loadReleases(); }, 2000);
             } else {
                 toast('Refresh failed.', 'err');
                 btn.disabled = false; btn.textContent = orig;
@@ -676,7 +692,6 @@ function doDelete(btn) {
         .then(function(r) {
             if (r.ok) {
                 toast('Project deleted.');
-                loadProjects();
                 loadReleases();
             } else {
                 toast('Delete failed.', 'err');
@@ -918,8 +933,10 @@ document.getElementById('add-form').addEventListener('submit', function(e) {
     }).then(function(r) {
         if (!r.ok) return r.text().then(function(t) { throw new Error(t || 'Server error'); });
         e.target.reset();
+        onPlatformChange();
         toast('Project added — fetching releases in background.');
-        document.querySelector('[data-tab="projects"]').click();
+        closeAddPanel();
+        loadReleases();
     }).catch(function(err) {
         toast('Error: ' + err, 'err');
     }).finally(function() {
