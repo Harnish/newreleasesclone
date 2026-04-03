@@ -152,6 +152,71 @@ body {
     margin-bottom: 1.1rem;
 }
 
+/* ---- Slide-over settings panel ---- */
+.settings-panel {
+    max-width: 0;
+    overflow: hidden;
+    transition: max-width 0.25s ease;
+    flex-shrink: 0;
+}
+.settings-panel.open { max-width: 380px; }
+.settings-panel-inner {
+    width: 360px;
+    background: #1a2840;
+    border-left: 1px solid #2d4a6e;
+    padding: 1.1rem 1rem;
+    min-height: 100%;
+}
+.settings-section { margin-bottom: 1.25rem; }
+.settings-section-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.6rem;
+}
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: #cbd5e1;
+}
+.toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: #334155;
+    border-radius: 20px;
+    transition: background 0.2s;
+}
+.toggle-slider:before {
+    content: '';
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+.toggle input:checked + .toggle-slider { background: #3b82f6; }
+.toggle input:checked + .toggle-slider:before { transform: translateX(16px); }
+
+/* ---- Inline project control buttons ---- */
+.proj-ctrl {
+    font-size: 0.9rem;
+    padding: 0.2rem 0.35rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.proj-header:hover .proj-ctrl { opacity: 1; }
+.proj-ctrl:focus { opacity: 1; }
+
 /* ---- Cards ---- */
 .card {
     background: #1e293b;
@@ -395,6 +460,15 @@ body {
                 </form>
             </div>
         </div>
+        <div id="settings-panel" class="settings-panel">
+            <div class="settings-panel-inner">
+                <div class="add-panel-title">
+                    <span id="settings-panel-title">Settings</span>
+                    <button class="btn btn-ghost" onclick="closeSettingsPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                </div>
+                <div id="settings-panel-body"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -531,6 +605,7 @@ function init() {
 
 // ---- Add panel ----
 function toggleAddPanel() {
+    closeSettingsPanel();
     var panel = document.getElementById('add-panel');
     panel.classList.toggle('open');
 }
@@ -540,7 +615,7 @@ function closeAddPanel() {
 }
 
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeAddPanel();
+    if (e.key === 'Escape') { closeAddPanel(); closeSettingsPanel(); }
 });
 
 // ---- Releases tab ----
@@ -585,6 +660,16 @@ function buildReleasesHTML(releases, projects) {
                     (platform ? '<span class="badge ' + esc(platform) + '">' + esc(platform) + '</span>' : '') +
                 '</div>' +
                 '<div class="proj-right">' +
+                    '<button class="btn btn-ghost proj-ctrl" title="Refresh" ' +
+                        'data-id="' + esc(pid) + '" ' +
+                        'onclick="event.stopPropagation();doRefresh(this)">&#x21BB;</button>' +
+                    '<button class="btn btn-ghost proj-ctrl" title="Settings" ' +
+                        'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
+                        'data-push="' + (proj && proj.push_enabled ? '1' : '0') + '" ' +
+                        'onclick="event.stopPropagation();openSettingsPanel(this)">&#x2699;</button>' +
+                    '<button class="btn btn-ghost proj-ctrl" title="Delete" style="color:#f87171" ' +
+                        'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
+                        'onclick="event.stopPropagation();doDelete(this)">&#x2715;</button>' +
                     '<span class="ver-count">' + rels.length + ' versions</span>' +
                     '<span class="chevron">&#x25BC;</span>' +
                 '</div>' +
@@ -613,9 +698,84 @@ function loadReleases() {
         fetch('/api/projects').then(function(r) { return r.json(); })
     ]).then(function(res) {
         document.getElementById('releases-root').innerHTML = buildReleasesHTML(res[0], res[1]);
+        if (_settingsRepoID) {
+            var fresh = (res[1] || []).filter(function(p) { return p.id === _settingsRepoID; })[0];
+            if (fresh) {
+                loadSettingsPanel(_settingsRepoID, fresh.push_enabled);
+            } else {
+                closeSettingsPanel();
+            }
+        }
     }).catch(function(err) {
         document.getElementById('releases-root').innerHTML = '<div class="empty"><h3>Failed to load</h3></div>';
         console.error('loadReleases:', err);
+    });
+}
+
+// ---- Settings panel ----
+var _settingsRepoID = null;
+
+function openSettingsPanel(btn) {
+    var id = btn.dataset.id;
+    var name = btn.dataset.name;
+    var pushEnabled = btn.dataset.push === '1';
+    _settingsRepoID = id;
+    document.getElementById('settings-panel-title').textContent = name;
+    closeAddPanel();
+    document.getElementById('settings-panel').classList.add('open');
+    loadSettingsPanel(id, pushEnabled);
+}
+
+function closeSettingsPanel() {
+    document.getElementById('settings-panel').classList.remove('open');
+    _settingsRepoID = null;
+}
+
+function loadSettingsPanel(id, pushEnabled) {
+    var body = document.getElementById('settings-panel-body');
+    body.innerHTML = '<div style="font-size:0.85rem;color:#64748b">Loading...</div>';
+    fetch('/api/webhooks?repo_id=' + encodeURIComponent(id))
+        .then(function(r) { return r.json(); })
+        .then(function(hooks) {
+            body.innerHTML = renderSettingsPanelBody(id, pushEnabled, hooks || []);
+        })
+        .catch(function() {
+            body.innerHTML = '<div style="color:#f87171;font-size:0.85rem">Failed to load settings.</div>';
+        });
+}
+
+function renderSettingsPanelBody(id, pushEnabled, hooks) {
+    return '<div class="settings-section">' +
+            '<div class="settings-section-title">Push Notifications</div>' +
+            '<div class="toggle-row">' +
+                '<span>Notify on new releases</span>' +
+                '<label class="toggle">' +
+                    '<input type="checkbox" ' + (pushEnabled ? 'checked' : '') + ' onchange="doTogglePush(this,\'' + esc(id) + '\')">' +
+                    '<span class="toggle-slider"></span>' +
+                '</label>' +
+            '</div>' +
+        '</div>' +
+        '<div class="settings-section">' +
+            '<div class="settings-section-title">Webhooks</div>' +
+            '<div id="whpanel-' + esc(id) + '">' + renderWebhookPanel(id, hooks) + '</div>' +
+        '</div>';
+}
+
+function doTogglePush(checkbox, id) {
+    fetch('/api/project-settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({repo_id: id, push_enabled: checkbox.checked})
+    }).then(function(r) {
+        if (r.ok) {
+            toast('Notification setting updated.', 'ok');
+        } else {
+            checkbox.checked = !checkbox.checked;
+            toast('Failed to update setting.', 'err');
+        }
+    }).catch(function() {
+        checkbox.checked = !checkbox.checked;
+        toast('Error updating setting.', 'err');
     });
 }
 

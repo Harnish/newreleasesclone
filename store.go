@@ -172,6 +172,15 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 5 {
+		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN push_enabled INTEGER NOT NULL DEFAULT 1`); err != nil {
+			return fmt.Errorf("failed to migrate to v5: %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 5"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -212,7 +221,7 @@ func (s *Store) getPushSubscriptionsForRepo(repoID string) []pushSub {
 		SELECT ps.user_id, ps.endpoint, ps.p256dh, ps.auth
 		FROM push_subscriptions ps
 		INNER JOIN user_repos ur ON ur.user_id = ps.user_id
-		WHERE ur.repo_id = ?`, repoID)
+		WHERE ur.repo_id = ? AND ur.push_enabled = 1`, repoID)
 	if err != nil {
 		return nil
 	}
@@ -296,6 +305,22 @@ func (s *Store) GetUserWebhooksForRepo(userID, repoID string) []Webhook {
 	}
 	defer rows.Close()
 	return scanWebhooks(rows)
+}
+
+func (s *Store) SetProjectPushEnabled(userID, repoID string, enabled bool) (bool, error) {
+	val := 0
+	if enabled {
+		val = 1
+	}
+	res, err := s.db.Exec(
+		"UPDATE user_repos SET push_enabled = ? WHERE user_id = ? AND repo_id = ?",
+		val, userID, repoID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 func (s *Store) getWebhooksForRepo(repoID string) []struct {
@@ -530,7 +555,7 @@ func (s *Store) RemoveUserRepo(userID, repoID string) bool {
 
 func (s *Store) GetUserRepos(userID string) []Project {
 	rows, err := s.db.Query(`
-		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count
+		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled
 		FROM repos r
 		INNER JOIN user_repos ur ON ur.repo_id = r.id
 		WHERE ur.user_id = ?
@@ -540,7 +565,22 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		return []Project{}
 	}
 	defer rows.Close()
-	return scanProjects(rows)
+	projects := []Project{}
+	for rows.Next() {
+		var p Project
+		var lastRefresh string
+		var pushEnabled int
+		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled); err != nil {
+			log.Printf("⚠ Failed to scan project: %v", err)
+			continue
+		}
+		if lastRefresh != "" {
+			p.LastRefresh, _ = time.Parse(time.RFC3339, lastRefresh)
+		}
+		p.PushEnabled = pushEnabled != 0
+		projects = append(projects, p)
+	}
+	return projects
 }
 
 // GetReleases returns all releases for a specific repo (used for testing).

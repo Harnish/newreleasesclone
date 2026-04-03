@@ -33,4 +33,5 @@ type Project struct {
 	RepoURL      string    `json:"repo_url"`
 	LastRefresh  time.Time `json:"last_refresh"`
 	RefreshCount int       `json:"refresh_count"`
+	PushEnabled  bool      `json:"push_enabled"`
 }

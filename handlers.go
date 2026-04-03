@@ -284,6 +284,37 @@ func handlePushSubscribe(w http.ResponseWriter, r *http.Request, userID string) 
 	}
 }
 
+// POST /api/project-settings — update per-project settings (push_enabled).
+func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		RepoID      string `json:"repo_id"`
+		PushEnabled bool   `json:"push_enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.RepoID == "" {
+		http.Error(w, "repo_id is required", http.StatusBadRequest)
+		return
+	}
+	ok, err := store.SetProjectPushEnabled(userID, req.RepoID, req.PushEnabled)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		http.Error(w, "project not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 func handleRefreshProject(w http.ResponseWriter, r *http.Request, userID string) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method != http.MethodPost {

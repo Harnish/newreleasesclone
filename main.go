@@ -26,6 +26,7 @@ func main() {
 	http.HandleFunc("/api/refresh-check", requireAuth(handleRefreshCheck))
 	http.HandleFunc("/api/refresh", requireAuth(handleRefreshProject))
 	http.HandleFunc("/api/webhooks", requireAuth(handleWebhooks))
+	http.HandleFunc("/api/project-settings", requireAuth(handleProjectSettings))
 	http.HandleFunc("/api/push/vapid-key", requireAuth(handlePushVapidKey))
 	http.HandleFunc("/api/push/subscribe", requireAuth(handlePushSubscribe))
 
