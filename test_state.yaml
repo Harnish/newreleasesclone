@@ -1,0 +1,29 @@
+{
+  "Projects": {
+    "test-1": {
+      "id": "test-1",
+      "name": "Test Project",
+      "platform": "github",
+      "repo_url": "https://github.com/test/repo",
+      "last_refresh": "2026-04-01T07:53:12.26398773-04:00",
+      "refresh_count": 1
+    }
+  },
+  "Releases": {
+    "test-1": [
+      {
+        "id": "rel-1",
+        "name": "Test Project",
+        "version": "v1.0.0",
+        "platform": "github",
+        "url": "https://github.com/test/repo/releases/v1.0.0",
+        "published_at": "2026-04-01T07:53:12.264178359-04:00",
+        "description": "Test release",
+        "release_notes": "Full release notes here"
+      }
+    ]
+  },
+  "Refreshed": {
+    "test-1": "2026-04-01T07:53:12.263986706-04:00"
+  }
+}

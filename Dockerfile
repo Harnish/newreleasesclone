@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.24.9-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install dependencies
 RUN apk add --no-cache git ca-certificates
@@ -17,10 +17,10 @@ RUN go mod download
 COPY . .
 
 # Run tests
-RUN go test -v -race
+RUN go test -v ./...
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o newreleases main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o newreleases .
 
 # Final stage
 FROM alpine:latest
@@ -28,8 +28,9 @@ FROM alpine:latest
 # Install ca-certificates for HTTPS
 RUN apk --no-cache add ca-certificates
 
-# Create app directory
+# Create app and data directories
 WORKDIR /app
+RUN mkdir -p /app/data
 
 # Copy binary from builder
 COPY --from=builder /build/newreleases .

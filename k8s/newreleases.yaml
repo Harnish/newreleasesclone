@@ -1,0 +1,81 @@
+---
+# Persistent storage for SQLite database.
+# Uses k3s default local-path provisioner.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: newreleases-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 512Mi
+  storageClassName: local-path
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: newreleases
+  namespace: default
+  labels:
+    app: newreleases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: newreleases
+  template:
+    metadata:
+      labels:
+        app: newreleases
+    spec:
+      containers:
+        - name: newreleases
+          image: registry.whiskeyonthe.rocks/newreleases/newreleases:dev
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: newreleases-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: newreleases
+  namespace: default
+spec:
+  selector:
+    app: newreleases
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP

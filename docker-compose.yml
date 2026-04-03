@@ -9,7 +9,6 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./state.yaml:/app/state.yaml
       - ./data:/app/data
     environment:
       - LOG_LEVEL=info

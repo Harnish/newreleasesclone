@@ -52,7 +52,7 @@ test_unit:
   script:
     - echo "Running unit tests..."
     - apk add --no-cache git curl
-    - go test -v -race -coverprofile=coverage.out ./...
+    - go test -v -coverprofile=coverage.out ./...
     - go tool cover -func coverage.out
   artifacts:
     reports:

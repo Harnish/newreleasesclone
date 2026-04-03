@@ -14,8 +14,6 @@ newreleases
 *.o
 *.a
 
-# Test files
-*_test.go
 test_state.yaml
 
 # Documentation

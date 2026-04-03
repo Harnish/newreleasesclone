@@ -18,9 +18,8 @@ A modern, real-time release tracking system that monitors software releases acro
 - Background goroutine-based refreshes to avoid blocking
 
 💾 **Persistent State**
-- All projects and releases saved to `state.yaml`
+- All projects and releases stored in a SQLite database at `data/newreleases.db`
 - State survives server restarts
-- Human-readable YAML format for manual inspection/editing
 
 📝 **Full Release Notes**
 - Complete release notes captured from GitHub and GitLab
@@ -36,8 +35,8 @@ A modern, real-time release tracking system that monitors software releases acro
 
 ## Prerequisites
 
-- Go 1.24.9 or later
-- No external database required (uses local YAML storage)
+- Go 1.25.0 or later
+- No external database required (uses embedded SQLite)
 
 ## Installation
 
@@ -67,13 +66,13 @@ go build -o newreleases main.go
 The application will start on `http://localhost:8080`
 
 ### First Run
-On first run with no existing `state.yaml`:
+On first run with no existing database:
 - Server seeds demo data with 3 sample projects (kubernetes, react, golang)
 - Automatically fetches releases for each project
-- Saves state to `state.yaml`
+- Saves state to `data/newreleases.db`
 
 ### Subsequent Runs
-- Server loads existing projects and releases from `state.yaml`
+- Server loads existing projects and releases from `data/newreleases.db`
 - Resumes tracking from where it left off
 
 ## Usage
@@ -184,16 +183,16 @@ curl -X POST "http://localhost:8080/api/refresh?id=proj_1234567890"
 
 ```
 newreleases/
-├── main.go                    # Main application code
-├── go.mod                     # Go module definition
-├── go.sum                     # Dependency checksums
-├── state.yaml                 # Persisted state (auto-generated)
-├── README.md                  # This file
-├── RELEASE_NOTES_FEATURE.md   # Release notes implementation details
-├── PERSISTENCE_SUMMARY.md     # State persistence documentation
-├── REFRESH_FEATURE.md         # Refresh system documentation
-├── REFRESH_FLOW.md            # Detailed refresh flow diagrams
-└── STATE_STORAGE.md           # State storage architecture
+├── main.go          # Entry point, server setup, demo data seeding
+├── models.go        # Release, Project, StateFile types
+├── store.go         # Store (state management, persistence)
+├── fetchers.go      # Per-platform release fetchers
+├── handlers.go      # HTTP handlers
+├── ui.go            # Embedded HTML/CSS/JS frontend
+├── main_test.go     # Test suite
+├── go.mod           # Go module definition
+├── go.sum           # Dependency checksums
+└── state.json       # Persisted state (auto-generated)
 ```
 
 ## Data Structures
@@ -224,33 +223,17 @@ type Project struct {
 }
 ```
 
-## State File Format
+## Database Schema
 
-`state.yaml` stores all projects, releases, and refresh timestamps:
+State is stored in `data/newreleases.db` (SQLite). Two tables:
 
-```yaml
-projects:
-  proj_1234567890:
-    id: proj_1234567890
-    name: kubernetes
-    platform: github
-    repo_url: https://github.com/kubernetes/kubernetes
-    last_refresh: 2025-11-10T12:00:00Z
-    refresh_count: 5
+**projects** — `id`, `name`, `platform`, `repo_url`, `last_refresh`, `refresh_count`
 
-releases:
-  proj_1234567890:
-    - id: gh_123456
-      name: kubernetes
-      version: v1.30.0
-      platform: github
-      url: https://github.com/kubernetes/kubernetes/releases/tag/v1.30.0
-      published_at: 2025-11-10T10:30:00Z
-      description: "Major release..."
-      release_notes: "## Features\n- Feature A\n..."
+**releases** — `id`, `project_id`, `name`, `version`, `platform`, `url`, `published_at`, `description`, `release_notes`
 
-refreshed:
-  proj_1234567890: 2025-11-10T12:00:00Z
+You can inspect it with any SQLite client:
+```bash
+sqlite3 data/newreleases.db "SELECT name, platform, refresh_count FROM projects;"
 ```
 
 ## Configuration
@@ -261,22 +244,16 @@ Projects are considered stale if not refreshed within **30 minutes**. This is ch
 - Manual refresh always fetches latest data
 
 ### Limits
-- Maximum releases stored per project: **50**
-- NPM versions displayed: **10 latest**
-- PyPI releases displayed: **10 latest**
-- Docker tags displayed: **10 latest**
-- GitHub/GitLab releases: **30 latest** (with stable release priority)
-
-To modify these limits, edit the constants in `main.go`:
-- Line ~85: `if len(s.releases[projectID]) > 50`
-- Line ~315: `if i >= 10`
-- Line ~376: `if i >= 10`
-- Line ~180: `?per_page=30`
+- NPM versions fetched: **10 latest** (`fetchers.go` — `fetchNPMVersions`)
+- PyPI releases fetched: **10 latest** (`fetchers.go` — `fetchPyPIReleases`)
+- Docker tags fetched: **10 latest** (`fetchers.go` — `fetchDockerTags`)
+- GitHub/GitLab releases fetched: **30 latest** (with stable release priority) (`fetchers.go` — `fetchGitHubReleases`)
+- Releases stored per project: capped in `store.go` — `AddRelease`
 
 ## Troubleshooting
 
 ### Port already in use
-Change the port in `main.go` line 890:
+Change the port in `main.go` in the `http.ListenAndServe` call:
 ```go
 log.Fatal(http.ListenAndServe(":8081", nil)) // Use 8081 instead
 ```
@@ -286,10 +263,10 @@ log.Fatal(http.ListenAndServe(":8081", nil)) // Use 8081 instead
 - Check network connectivity to the API endpoints
 - Some platforms may have rate limits (GitHub API)
 
-### State file corrupted
-Delete `state.yaml` and restart the server:
+### Database corrupted
+Delete the database and restart the server:
 ```bash
-rm state.yaml
+rm data/newreleases.db
 ./newreleases
 ```
 Server will reseed with demo data.
@@ -316,7 +293,7 @@ For higher limits, consider adding API authentication tokens.
 ## Development
 
 ### Requirements
-- Go 1.24.9 or later
+- Go 1.25.0 or later
 - `gopkg.in/yaml.v3` (automatically managed by `go.mod`)
 
 ### Build
@@ -345,7 +322,6 @@ docker run -p 8080:8080 newreleases:latest
 ./build-docker.sh
 ```
 
-See [DOCKER.md](DOCKER.md) for complete Docker setup guide.
 
 ### Buildah/Podman
 
@@ -361,7 +337,6 @@ chmod +x build-podman.sh
 ./build-podman.sh newreleases latest docker.io/yourusername
 ```
 
-See [BUILDAH_PODMAN.md](BUILDAH_PODMAN.md) for complete Buildah/Podman guide.
 
 ### Docker-Compose
 
@@ -394,7 +369,6 @@ Automated build and push to Docker Hub on every push:
 # Automatically triggered on push/pull requests
 ```
 
-See [.github/workflows/docker.yml](.github/workflows/docker.yml) for details.
 
 ### GitLab CI/CD
 
@@ -425,7 +399,6 @@ Comprehensive multi-stage pipeline with testing, building, and deployment:
 - ✅ Deploy to staging/production (manual)
 - ✅ Create releases on tags
 
-See [.gitlab-ci.yml](.gitlab-ci.yml) for complete pipeline configuration.
 
 **Quick GitLab Setup**:
 1. Push project to GitLab
@@ -461,7 +434,6 @@ go tool cover -html=coverage.out
 go test -v -run TestStoreAddProject ./...
 ```
 
-See [TESTING.md](TESTING.md) for detailed testing documentation.
 
 ## Future Enhancements
 
@@ -494,7 +466,6 @@ MIT License - See LICENSE file for details
 ## Support
 
 For issues or questions:
-- Check existing documentation files (PERSISTENCE_SUMMARY.md, REFRESH_FEATURE.md, etc.)
 - Review the troubleshooting section above
 - Submit an issue on GitHub
 
