@@ -86,8 +86,10 @@ func fetchGitHubReleases(project Project) []Release {
 
 func fetchNPMVersions(project Project) []Release {
 	pkgName := project.Name
-	if strings.Contains(project.RepoURL, "github.com/facebook/react") {
-		pkgName = "react"
+	if strings.HasPrefix(project.RepoURL, "https://www.npmjs.com/package/") {
+		pkgName = strings.TrimPrefix(project.RepoURL, "https://www.npmjs.com/package/")
+	} else if strings.Contains(project.RepoURL, "github.com/facebook/react") {
+		pkgName = "react" // legacy entry
 	}
 
 	url := fmt.Sprintf("https://registry.npmjs.org/%s", pkgName)
@@ -210,12 +212,16 @@ func fetchPyPIReleases(project Project) []Release {
 }
 
 func fetchDockerTags(project Project) []Release {
-	repoParts := strings.Split(project.Name, "/")
 	var repo string
-	if len(repoParts) == 1 {
-		repo = fmt.Sprintf("library/%s", project.Name)
+	if strings.HasPrefix(project.RepoURL, "https://hub.docker.com/r/") {
+		repo = strings.TrimSuffix(strings.TrimPrefix(project.RepoURL, "https://hub.docker.com/r/"), "/")
 	} else {
-		repo = project.Name
+		repoParts := strings.Split(project.Name, "/")
+		if len(repoParts) == 1 {
+			repo = "library/" + project.Name
+		} else {
+			repo = project.Name
+		}
 	}
 
 	url := fmt.Sprintf("https://hub.docker.com/v2/repositories/%s/tags?page_size=10", repo)

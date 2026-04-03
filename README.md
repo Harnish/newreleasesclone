@@ -1,485 +1,100 @@
-# Release Tracker 🚀
+# Release Tracker
 
-A modern, real-time release tracking system that monitors software releases across multiple platforms (GitHub, GitLab, NPM, PyPI, Docker) with persistent state storage and automatic refresh capabilities.
+Track software releases across GitHub, GitLab, NPM, PyPI, and Docker Hub. Multi-user with shared release data.
 
 ## Features
 
-✨ **Multi-Platform Support**
-- GitHub releases with full release notes
-- GitLab releases
-- NPM package versions
-- PyPI releases
-- Docker image tags
-
-🔄 **Smart Refresh System**
-- **Auto-refresh on project add** - Immediately fetches releases when adding new projects
-- **Stale data detection** - Automatically refreshes data older than 30 minutes on page load
-- **Manual refresh** - One-click refresh button for any project
-- Background goroutine-based refreshes to avoid blocking
-
-💾 **Persistent State**
-- All projects and releases stored in a SQLite database at `data/newreleases.db`
-- State survives server restarts
-
-📝 **Full Release Notes**
-- Complete release notes captured from GitHub and GitLab
-- Truncated previews (200 chars) for quick scanning
-- Full text available via API for integration
-
-🎨 **Modern Web Interface**
-- Dark theme UI with responsive design
-- Tabbed navigation (Releases & Projects)
-- Real-time updates without page refresh
-- One-click project refresh with timestamps
-- Release metadata with platform badges and publish dates
-
-## Prerequisites
-
-- Go 1.25.0 or later
-- No external database required (uses embedded SQLite)
-
-## Installation
-
-### Clone the repository
-```bash
-git clone https://github.com/yourusername/newreleases.git
-cd newreleases
-```
-
-### Download dependencies
-```bash
-go mod download
-```
-
-### Build the application
-```bash
-go build -o newreleases main.go
-```
+- **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub
+- **User accounts**: Register/login with session-based auth; each user tracks their own set of projects
+- **Shared release data**: Two users adding the same repo share one set of fetched releases
+- **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm)
+- **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
+- **Full release notes**: GitHub/GitLab release bodies captured and expandable in the UI
+- **SQLite persistence**: All data stored in `data/newreleases.db`
 
 ## Running
 
-### Start the server
 ```bash
+go build -o newreleases .
 ./newreleases
+# → http://localhost:8080
 ```
 
-The application will start on `http://localhost:8080`
+Register an account on first visit, then add projects to track.
 
-### First Run
-On first run with no existing database:
-- Server seeds demo data with 3 sample projects (kubernetes, react, golang)
-- Automatically fetches releases for each project
-- Saves state to `data/newreleases.db`
+## Adding Projects
 
-### Subsequent Runs
-- Server loads existing projects and releases from `data/newreleases.db`
-- Resumes tracking from where it left off
+Select a platform, enter the identifier, and a display name is auto-filled:
 
-## Usage
+| Platform   | Enter            | Example                  |
+|------------|------------------|--------------------------|
+| GitHub     | `owner/repo`     | `kubernetes/kubernetes`  |
+| GitLab     | `owner/repo`     | `gitlab-org/gitlab`      |
+| NPM        | package name     | `react`                  |
+| PyPI       | package name     | `requests`               |
+| Docker Hub | image name       | `nginx` or `user/image`  |
 
-### Web Interface
+Full URLs are also accepted for GitHub and GitLab.
 
-1. **Releases Tab** - View all releases across all tracked projects
-   - Shows project name, version, platform, publish date
-   - Displays truncated release notes/description
-   - Organized by project
+## API
 
-2. **Projects Tab** - Manage your tracked projects
-   - Add new projects to track
-   - See last refresh timestamp for each project
-   - Manual refresh button for immediate data update
-   - Link to project repository
+All data endpoints require a valid session cookie (set by `/api/login` or `/api/register`).
 
-### Adding Projects
-
-Fill out the form in the Projects tab with:
-- **Project Name** - Display name (e.g., "kubernetes")
-- **Platform** - Select from: github, gitlab, npm, pypi, docker
-- **Repository URL** - Full URL to the project
-  - GitHub: `https://github.com/owner/repo`
-  - GitLab: `https://gitlab.com/owner/repo`
-  - NPM/PyPI: Package name or repo URL
-  - Docker: Docker Hub repository name
-
-Example:
-```
-Name: kubernetes
-Platform: github
-URL: https://github.com/kubernetes/kubernetes
-```
-
-### API Endpoints
-
-#### Get all projects
-```bash
-curl http://localhost:8080/api/projects
-```
-
-Response:
-```json
-[
-  {
-    "id": "proj_1234567890",
-    "name": "kubernetes",
-    "platform": "github",
-    "repo_url": "https://github.com/kubernetes/kubernetes",
-    "last_refresh": "2025-11-10T12:00:00Z",
-    "refresh_count": 5
-  }
-]
-```
-
-#### Add a new project
-```bash
-curl -X POST http://localhost:8080/api/projects \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "docker",
-    "platform": "github",
-    "repo_url": "https://github.com/moby/moby"
-  }'
-```
-
-#### Get all releases
-```bash
-curl http://localhost:8080/api/releases
-```
-
-Response:
-```json
-[
-  {
-    "id": "gh_123456",
-    "name": "kubernetes",
-    "version": "v1.30.0",
-    "platform": "github",
-    "url": "https://github.com/kubernetes/kubernetes/releases/tag/v1.30.0",
-    "published_at": "2025-11-10T10:30:00Z",
-    "description": "Major release with new features and improvements...",
-    "release_notes": "## Features\n- Feature A\n- Feature B\n\n## Bug Fixes\n- Fix A\n- Fix B"
-  }
-]
-```
-
-#### Check for stale data and refresh
-```bash
-curl http://localhost:8080/api/refresh-check
-```
-
-Response:
-```json
-{
-  "refreshed_count": 2,
-  "stale_projects": [...]
-}
-```
-
-#### Manually refresh a project
-```bash
-curl -X POST "http://localhost:8080/api/refresh?id=proj_1234567890"
-```
-
-## Project Structure
-
-```
-newreleases/
-├── main.go          # Entry point, server setup, demo data seeding
-├── models.go        # Release, Project, StateFile types
-├── store.go         # Store (state management, persistence)
-├── fetchers.go      # Per-platform release fetchers
-├── handlers.go      # HTTP handlers
-├── ui.go            # Embedded HTML/CSS/JS frontend
-├── main_test.go     # Test suite
-├── go.mod           # Go module definition
-├── go.sum           # Dependency checksums
-└── state.json       # Persisted state (auto-generated)
-```
-
-## Data Structures
-
-### Release
-```go
-type Release struct {
-    ID           string    // Unique identifier
-    Name         string    // Project name
-    Version      string    // Version/tag name
-    Platform     string    // github, gitlab, npm, pypi, docker
-    URL          string    // Link to release
-    PublishedAt  time.Time // Publication timestamp
-    Description  string    // Truncated (200 chars) for display
-    ReleaseNotes string    // Full release notes text
-}
-```
-
-### Project
-```go
-type Project struct {
-    ID          string    // Unique project ID
-    Name        string    // Project name
-    Platform    string    // Platform type
-    RepoURL     string    // Repository URL
-    LastRefresh time.Time // Last refresh timestamp
-    RefreshCount int      // Total number of refreshes
-}
-```
-
-## Database Schema
-
-State is stored in `data/newreleases.db` (SQLite). Two tables:
-
-**projects** — `id`, `name`, `platform`, `repo_url`, `last_refresh`, `refresh_count`
-
-**releases** — `id`, `project_id`, `name`, `version`, `platform`, `url`, `published_at`, `description`, `release_notes`
-
-You can inspect it with any SQLite client:
-```bash
-sqlite3 data/newreleases.db "SELECT name, platform, refresh_count FROM projects;"
-```
-
-## Configuration
-
-### Stale Data Threshold
-Projects are considered stale if not refreshed within **30 minutes**. This is checked:
-- On page load (via `/api/refresh-check`)
-- Manual refresh always fetches latest data
-
-### Limits
-- NPM versions fetched: **10 latest** (`fetchers.go` — `fetchNPMVersions`)
-- PyPI releases fetched: **10 latest** (`fetchers.go` — `fetchPyPIReleases`)
-- Docker tags fetched: **10 latest** (`fetchers.go` — `fetchDockerTags`)
-- GitHub/GitLab releases fetched: **30 latest** (with stable release priority) (`fetchers.go` — `fetchGitHubReleases`)
-- Releases stored per project: capped in `store.go` — `AddRelease`
-
-## Troubleshooting
-
-### Port already in use
-Change the port in `main.go` in the `http.ListenAndServe` call:
-```go
-log.Fatal(http.ListenAndServe(":8081", nil)) // Use 8081 instead
-```
-
-### No releases found
-- Ensure the project URL is correct for the platform
-- Check network connectivity to the API endpoints
-- Some platforms may have rate limits (GitHub API)
-
-### Database corrupted
-Delete the database and restart the server:
-```bash
-rm data/newreleases.db
-./newreleases
-```
-Server will reseed with demo data.
-
-### Empty releases list
-Projects may not have completed their initial refresh. Wait a few seconds or:
-1. Click "Refresh" on a project in the Projects tab
-2. Or navigate to Releases tab which triggers auto-refresh
-
-## Performance
-
-### Concurrent Operations
-- Each project refresh runs in its own goroutine (non-blocking)
-- State saves happen asynchronously
-- Multiple projects can be refreshed simultaneously
-
-### API Rate Limiting
-- GitHub API: 60 requests/hour (unauthenticated)
-- GitLab API: 10 requests/second (public API)
-- NPM/PyPI/Docker: No strict limits for basic access
-
-For higher limits, consider adding API authentication tokens.
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/register` | Create account |
+| `POST` | `/api/login` | Sign in |
+| `POST` | `/api/logout` | Sign out |
+| `GET` | `/api/me` | Current user |
+| `GET` | `/api/projects` | List tracked projects |
+| `POST` | `/api/projects` | Add project `{name, platform, repo_url}` |
+| `DELETE` | `/api/projects?id=<id>` | Stop tracking a project |
+| `GET` | `/api/releases` | All releases for tracked projects |
+| `POST` | `/api/refresh?id=<id>` | Refresh a specific project |
+| `GET` | `/api/refresh-check` | Trigger background refresh of stale repos |
 
 ## Development
 
-### Requirements
-- Go 1.25.0 or later
-- `gopkg.in/yaml.v3` (automatically managed by `go.mod`)
-
-### Build
 ```bash
-go build main.go
+go test -v ./...                          # all tests
+go test -v -run TestStoreAddRepo ./...    # single test
+go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out
+golangci-lint run
 ```
 
-### Run with verbose logging
+## Docker / Buildah
+
 ```bash
-./newreleases 2>&1 | grep -E "^(✓|⚠|🚀)"
-```
-
-## Containerization & Deployment
-
-### Docker
-
-Build and run with Docker:
-```bash
-# Build image
 docker build -t newreleases:latest .
+docker run -p 8080:8080 -v newreleases-data:/app/data newreleases:latest
 
-# Run container
-docker run -p 8080:8080 newreleases:latest
-
-# Or use the provided build script
-./build-docker.sh
+# Buildah/Podman (used in GitLab CI)
+./build-podman.sh [<repo> <tag> <registry>]
 ```
 
+## Kubernetes
 
-### Buildah/Podman
-
-Build OCI-compatible images with Buildah or Podman:
 ```bash
-# Make script executable
-chmod +x build-podman.sh
-
-# Build with defaults
-./build-podman.sh
-
-# Build and push to registry
-./build-podman.sh newreleases latest docker.io/yourusername
+kubectl apply -f k8s/newreleases.yaml
 ```
 
+Uses a `local-path` PVC to persist `data/` across pod restarts.
 
-### Docker-Compose
+## Architecture
 
-Quick local development setup:
-```bash
-# Start all services
-docker-compose up
+| File | Responsibility |
+|------|---------------|
+| `main.go` | Route registration, server startup |
+| `handlers.go` | HTTP handlers, `requireAuth` middleware |
+| `store.go` | SQLite layer — users, sessions, repos, releases |
+| `fetchers.go` | Per-platform release fetchers |
+| `models.go` | `User`, `Project`, `Release` structs |
+| `ui.go` | Embedded HTML/CSS/JS frontend |
 
-# In background
-docker-compose up -d
+**Schema (v2):** `users` → `sessions` → `user_repos` ↔ `repos` ← `releases`.  
+Repos are deduped by `UNIQUE(platform, repo_url)` so shared repos are fetched once.
 
-# View logs
-docker-compose logs -f
+## CI/CD
 
-# Stop services
-docker-compose down
-```
-
-## CI/CD Pipelines
-
-### GitHub Actions
-
-Automated build and push to Docker Hub on every push:
-```bash
-# Configure secrets in GitHub:
-# - DOCKER_USERNAME
-# - DOCKER_TOKEN
-
-# Workflow file: .github/workflows/docker.yml
-# Automatically triggered on push/pull requests
-```
-
-
-### GitLab CI/CD
-
-Comprehensive multi-stage pipeline with testing, building, and deployment:
-```bash
-# Configure variables in GitLab Settings > CI/CD:
-# - DOCKERHUB_USER (optional)
-# - DOCKERHUB_TOKEN (optional)
-# - STAGING_HOST, STAGING_USER, STAGING_PATH
-# - PRODUCTION_HOST, PRODUCTION_USER, PRODUCTION_PATH
-# - SSH_PRIVATE_KEY
-
-# Pipeline stages:
-# 1. Build: Buildah and Podman builds
-# 2. Test: Unit tests, linting, security scanning
-# 3. Push: Push to GitLab Registry and Docker Hub
-# 4. Deploy: Manual deployment to staging/production
-```
-
-**GitLab Pipeline Features**:
-- ✅ Build with Buildah (fast, efficient)
-- ✅ Build with Podman (Docker-compatible)
-- ✅ Run unit tests with coverage reporting
-- ✅ Lint with golangci-lint
-- ✅ Security scan with Trivy
-- ✅ Push to GitLab Registry automatically
-- ✅ Push to Docker Hub on tags (manual)
-- ✅ Deploy to staging/production (manual)
-- ✅ Create releases on tags
-
-
-**Quick GitLab Setup**:
-1. Push project to GitLab
-2. Set CI/CD variables in **Settings > CI/CD > Variables**
-3. Pipeline runs automatically on push
-4. View pipeline in **CI/CD > Pipelines**
-
-**Running Deployments**:
-```
-# Manual deployment available via GitLab UI:
-1. Go to CI/CD > Pipelines
-2. Click on pipeline
-3. Find deploy_staging or deploy_production job
-4. Click "Play" button
-5. Watch logs in real-time
-```
-
-## Testing
-
-Run comprehensive test suite:
-```bash
-# Run all tests
-go test -v ./...
-
-# Run with race detection
-go test -v -race ./...
-
-# Generate coverage report
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
-
-# Run specific test
-go test -v -run TestStoreAddProject ./...
-```
-
-
-## Future Enhancements
-
-- [x] Docker image for easy deployment
-- [x] Buildah/Podman OCI image support
-- [x] GitHub Actions CI/CD pipeline
-- [x] GitLab CI/CD pipeline
-- [ ] API authentication and security
-- [ ] Release notes markdown rendering in UI
-- [ ] Notification system (email, Slack, Discord)
-- [ ] Release comparison between versions
-- [ ] Search and advanced filtering
-- [ ] Configurable refresh intervals per project
-- [ ] Webhook support for external integrations
-- [ ] Database backend option (PostgreSQL, SQLite)
-- [ ] Multiple users/teams support
-
-## Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Support
-
-For issues or questions:
-- Review the troubleshooting section above
-- Submit an issue on GitHub
-
-## Changelog
-
-### v0.1.0 (Current)
-- Initial release
-- Multi-platform release tracking
-- Persistent state storage with YAML
-- Smart refresh system with stale detection
-- Full release notes support
-- Web-based management interface
-- RESTful API endpoints
-
----
-
-Made with ❤️ for tracking software releases
+- **GitHub Actions** (`.github/workflows/docker.yml`): test → build → push `ghcr.io` → Trivy scan
+- **GitLab CI** (`.gitlab-ci.yml`): test → lint → Buildah build → push GitLab registry → Trivy scan → manual deploy stages

@@ -18,36 +18,98 @@ body {
     min-height: 100vh;
 }
 
+/* ---- Auth page ---- */
+.auth-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 1.5rem;
+}
+.auth-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 2rem;
+    width: 100%;
+    max-width: 380px;
+}
+.auth-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #60a5fa;
+    margin-bottom: 0.25rem;
+}
+.auth-subtitle { color: #64748b; font-size: 0.82rem; margin-bottom: 1.5rem; }
+.auth-tabs {
+    display: flex;
+    gap: 0;
+    background: #0f172a;
+    border-radius: 6px;
+    padding: 3px;
+    margin-bottom: 1.25rem;
+}
+.auth-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 0.45rem 0;
+    transition: background 0.15s, color 0.15s;
+}
+.auth-tab.active { background: #1e293b; color: #e2e8f0; }
+.auth-form { display: none; }
+.auth-form.active { display: block; }
+.auth-error {
+    background: #3b0000;
+    border: 1px solid #7f1d1d;
+    color: #f87171;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 1rem;
+    display: none;
+}
+
+/* ---- App header ---- */
 .app-header {
     background: #1e293b;
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1.5rem;
     border-bottom: 1px solid #334155;
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.75rem;
 }
-.app-title { font-size: 1.15rem; font-weight: 700; color: #60a5fa; }
+.app-title { font-size: 1.1rem; font-weight: 700; color: #60a5fa; flex: 1; }
+.user-info { display: flex; align-items: center; gap: 0.75rem; }
+.username { color: #94a3b8; font-size: 0.82rem; }
 
+/* ---- Toast ---- */
 .toast {
     position: fixed;
     top: 1rem;
     right: 1rem;
-    padding: 0.7rem 1.1rem;
+    padding: 0.65rem 1rem;
     border-radius: 6px;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 500;
     z-index: 200;
     opacity: 0;
     transform: translateY(-6px);
     transition: opacity 0.2s, transform 0.2s;
     pointer-events: none;
-    max-width: 320px;
+    max-width: 300px;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast.ok  { background: #052e16; color: #4ade80; border: 1px solid #14532d; }
 .toast.err { background: #3b0000; color: #f87171; border: 1px solid #7f1d1d; }
 .toast.inf { background: #172554; color: #93c5fd; border: 1px solid #1e3a8a; }
 
+/* ---- Tabs ---- */
 .tabs {
     background: #1e293b;
     border-bottom: 1px solid #334155;
@@ -61,7 +123,7 @@ body {
     color: #94a3b8;
     cursor: pointer;
     font-size: 0.875rem;
-    padding: 0.875rem 1.1rem;
+    padding: 0.8rem 1.1rem;
     transition: color 0.15s, border-color 0.15s;
 }
 .tab-btn:hover { color: #e2e8f0; }
@@ -71,6 +133,7 @@ body {
 .panel { display: none; }
 .panel.active { display: block; }
 
+/* ---- Cards ---- */
 .card {
     background: #1e293b;
     border: 1px solid #334155;
@@ -79,23 +142,7 @@ body {
     overflow: hidden;
 }
 
-/* Releases accordion */
-.proj-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.9rem 1.1rem;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-.proj-header:hover { background: #263548; }
-.proj-header-left { display: flex; align-items: center; gap: 0.6rem; }
-.proj-name { font-weight: 600; font-size: 0.95rem; }
-.proj-right { display: flex; align-items: center; gap: 0.75rem; }
-.ver-count { color: #64748b; font-size: 0.78rem; }
-.chevron { color: #64748b; font-size: 0.7rem; transition: transform 0.2s; display: inline-block; }
-.chevron.open { transform: rotate(180deg); }
-
+/* ---- Badges ---- */
 .badge {
     font-size: 0.67rem;
     font-weight: 600;
@@ -111,6 +158,23 @@ body {
 .badge.npm    { background: #103a26; color: #4ade80; }
 .badge.pypi   { background: #3b2000; color: #fb923c; }
 .badge.docker { background: #0c2a42; color: #38bdf8; }
+
+/* ---- Releases accordion ---- */
+.proj-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.875rem 1.1rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.proj-header:hover { background: #263548; }
+.proj-header-left { display: flex; align-items: center; gap: 0.6rem; }
+.proj-name { font-weight: 600; font-size: 0.95rem; }
+.proj-right { display: flex; align-items: center; gap: 0.75rem; }
+.ver-count { color: #64748b; font-size: 0.78rem; }
+.chevron { color: #64748b; font-size: 0.7rem; transition: transform 0.2s; display: inline-block; }
+.chevron.open { transform: rotate(180deg); }
 
 .ver-list { display: none; border-top: 1px solid #334155; }
 .ver-list.open { display: block; }
@@ -149,7 +213,7 @@ body {
 }
 .ver-link:hover { text-decoration: underline; }
 
-/* Projects tab */
+/* ---- Projects tab ---- */
 .proj-card {
     padding: 0.9rem 1.1rem;
     display: flex;
@@ -158,11 +222,12 @@ body {
     gap: 1rem;
 }
 .proj-card-info { flex: 1; min-width: 0; }
-.proj-card-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; }
+.proj-card-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.25rem; }
 .proj-card-meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.2rem; }
-.proj-card-sub { color: #64748b; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
+.proj-card-sub { color: #64748b; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
 .proj-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
 
+/* ---- Buttons ---- */
 .btn {
     padding: 0.45rem 0.85rem;
     border: none;
@@ -176,16 +241,16 @@ body {
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-primary { background: #3b82f6; color: #fff; }
 .btn-primary:hover:not(:disabled) { background: #2563eb; }
-.btn-green  { background: #059669; color: #fff; }
-.btn-green:hover:not(:disabled)  { background: #047857; }
-.btn-red    { background: #dc2626; color: #fff; }
-.btn-red:hover:not(:disabled)    { background: #b91c1c; }
+.btn-green { background: #059669; color: #fff; }
+.btn-green:hover:not(:disabled) { background: #047857; }
+.btn-red { background: #dc2626; color: #fff; }
+.btn-red:hover:not(:disabled) { background: #b91c1c; }
 .btn-outline { background: transparent; color: #94a3b8; border: 1px solid #334155; }
 .btn-outline:hover:not(:disabled) { background: #1e293b; color: #e2e8f0; }
+.btn-ghost { background: transparent; color: #64748b; border: none; font-size: 0.75rem; }
+.btn-ghost:hover:not(:disabled) { color: #e2e8f0; }
 
-/* Add form */
-.form-wrap { max-width: 480px; padding: 1.5rem; }
-.form-title { font-size: 1rem; font-weight: 600; margin-bottom: 1.1rem; color: #e2e8f0; }
+/* ---- Form ---- */
 .form-group { margin-bottom: 0.9rem; }
 .form-group label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.35rem; }
 .form-group input, .form-group select {
@@ -200,6 +265,10 @@ body {
 .form-group input:focus, .form-group select:focus { outline: none; border-color: #3b82f6; }
 .form-group select option { background: #0f172a; }
 
+.add-form-card { padding: 1.25rem; max-width: 480px; }
+.add-form-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; }
+
+/* ---- Misc ---- */
 .empty { text-align: center; padding: 4rem 2rem; color: #475569; }
 .empty h3 { font-size: 0.95rem; margin-bottom: 0.4rem; }
 .empty p { font-size: 0.82rem; }
@@ -208,9 +277,57 @@ body {
 </head>
 <body>
 
+<!-- ===================== AUTH PAGE ===================== -->
+<div id="auth-page">
+<div class="auth-wrap">
+<div class="auth-card">
+    <div class="auth-title">&#x1F680; Release Tracker</div>
+    <div class="auth-subtitle">Track software releases across GitHub, NPM, PyPI and more.</div>
+
+    <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login', this)">Sign In</button>
+        <button class="auth-tab" onclick="switchAuthTab('register', this)">Create Account</button>
+    </div>
+
+    <div id="auth-error" class="auth-error"></div>
+
+    <form id="login-form" class="auth-form active" onsubmit="doLogin(event)">
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" name="username" required autocomplete="username">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" name="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="login-btn">Sign In</button>
+    </form>
+
+    <form id="register-form" class="auth-form" onsubmit="doRegister(event)">
+        <div class="form-group">
+            <label>Username <span style="color:#475569">(min 3 chars)</span></label>
+            <input type="text" name="username" required minlength="3" autocomplete="username">
+        </div>
+        <div class="form-group">
+            <label>Password <span style="color:#475569">(min 8 chars)</span></label>
+            <input type="password" name="password" required minlength="8" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="register-btn">Create Account</button>
+    </form>
+</div>
+</div>
+</div>
+
+<!-- ===================== MAIN APP ===================== -->
+<div id="app-page" style="display:none">
+
 <header class="app-header">
     <span>&#x1F680;</span>
     <span class="app-title">Release Tracker</span>
+    <div class="user-info">
+        <span class="username" id="username-display"></span>
+        <button class="btn btn-ghost" onclick="doLogout()">Sign out</button>
+    </div>
 </header>
 
 <div id="toast" class="toast"></div>
@@ -229,16 +346,12 @@ body {
         <div id="projects-root"><div class="loading">Loading...</div></div>
     </div>
     <div id="panel-add" class="panel">
-        <div class="card form-wrap">
-            <div class="form-title">Add New Project</div>
+        <div class="card add-form-card">
+            <div class="add-form-title">Add New Project</div>
             <form id="add-form">
                 <div class="form-group">
-                    <label>Project Name</label>
-                    <input type="text" name="name" required placeholder="e.g., kubernetes">
-                </div>
-                <div class="form-group">
                     <label>Platform</label>
-                    <select name="platform" required>
+                    <select name="platform" id="add-platform" required onchange="onPlatformChange()">
                         <option value="github">GitHub</option>
                         <option value="gitlab">GitLab</option>
                         <option value="npm">NPM</option>
@@ -247,8 +360,13 @@ body {
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Repository URL</label>
-                    <input type="url" name="repo_url" required placeholder="https://github.com/owner/repo">
+                    <label id="add-repo-label">Repository</label>
+                    <input type="text" name="repo_url" id="add-repo-url" required placeholder="owner/repo" oninput="autoFillName()">
+                    <span id="add-repo-hint" style="display:block;font-size:0.74rem;color:#475569;margin-top:0.3rem"></span>
+                </div>
+                <div class="form-group">
+                    <label>Display name</label>
+                    <input type="text" name="name" id="add-name" required placeholder="e.g., kubernetes">
                 </div>
                 <button type="submit" class="btn btn-primary" id="add-btn">Add Project</button>
             </form>
@@ -256,7 +374,10 @@ body {
     </div>
 </div>
 
+</div><!-- /app-page -->
+
 <script>
+// ---- Utilities ----
 function esc(s) {
     var d = document.createElement('div');
     d.textContent = s == null ? '' : String(s);
@@ -266,6 +387,7 @@ function esc(s) {
 var _toastTimer = null;
 function toast(msg, type) {
     var el = document.getElementById('toast');
+    if (!el) return;
     el.textContent = msg;
     el.className = 'toast show ' + (type || 'ok');
     clearTimeout(_toastTimer);
@@ -285,6 +407,104 @@ function fmtAge(iso) {
     return new Date(iso).toLocaleDateString();
 }
 
+// ---- Auth page ----
+function switchAuthTab(tab, btn) {
+    document.querySelectorAll('.auth-tab').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.auth-form').forEach(function(f) { f.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById(tab + '-form').classList.add('active');
+    document.getElementById('auth-error').style.display = 'none';
+}
+
+function showAuthError(msg) {
+    var el = document.getElementById('auth-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+function doLogin(e) {
+    e.preventDefault();
+    var btn = document.getElementById('login-btn');
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { data[k] = v; });
+    btn.disabled = true; btn.textContent = 'Signing in...';
+    fetch('/api/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t || 'Login failed'); });
+        return r.json();
+    }).then(function(user) {
+        currentUser = user;
+        showApp();
+    }).catch(function(err) {
+        showAuthError(err.message);
+    }).finally(function() {
+        btn.disabled = false; btn.textContent = 'Sign In';
+    });
+}
+
+function doRegister(e) {
+    e.preventDefault();
+    var btn = document.getElementById('register-btn');
+    var data = {};
+    new FormData(e.target).forEach(function(v, k) { data[k] = v; });
+    btn.disabled = true; btn.textContent = 'Creating account...';
+    fetch('/api/register', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t || 'Registration failed'); });
+        return r.json();
+    }).then(function(user) {
+        currentUser = user;
+        showApp();
+    }).catch(function(err) {
+        showAuthError(err.message);
+    }).finally(function() {
+        btn.disabled = false; btn.textContent = 'Create Account';
+    });
+}
+
+function doLogout() {
+    fetch('/api/logout', { method: 'POST' }).finally(function() {
+        currentUser = null;
+        document.getElementById('app-page').style.display = 'none';
+        document.getElementById('auth-page').style.display = '';
+        document.getElementById('auth-error').style.display = 'none';
+    });
+}
+
+// ---- App init ----
+var currentUser = null;
+
+function showApp() {
+    document.getElementById('auth-page').style.display = 'none';
+    document.getElementById('app-page').style.display = '';
+    document.getElementById('username-display').textContent = currentUser.username;
+    fetch('/api/refresh-check').catch(function() {});
+    loadReleases();
+    loadProjects();
+}
+
+function init() {
+    fetch('/api/me')
+        .then(function(r) {
+            if (!r.ok) throw new Error('not authenticated');
+            return r.json();
+        })
+        .then(function(user) {
+            currentUser = user;
+            showApp();
+        })
+        .catch(function() {
+            document.getElementById('auth-page').style.display = '';
+            document.getElementById('app-page').style.display = 'none';
+        });
+}
+
 // ---- Tabs ----
 document.querySelectorAll('.tab-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -300,15 +520,12 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
 // ---- Releases tab ----
 function buildReleasesHTML(releases, projects) {
     if (!releases || releases.length === 0) {
-        return '<div class="empty"><h3>No releases yet</h3><p>Add projects to start tracking releases.</p></div>';
+        return '<div class="empty"><h3>No releases yet</h3><p>Add projects to start tracking.</p></div>';
     }
-
     var projMap = {};
     (projects || []).forEach(function(p) { projMap[p.id] = p; });
 
-    // Group by project_id preserving first-seen order
-    var order = [];
-    var groups = {};
+    var order = [], groups = {};
     releases.forEach(function(r) {
         var pid = r.project_id || '';
         if (!groups[pid]) { groups[pid] = []; order.push(pid); }
@@ -371,7 +588,7 @@ function loadReleases() {
     ]).then(function(res) {
         document.getElementById('releases-root').innerHTML = buildReleasesHTML(res[0], res[1]);
     }).catch(function(err) {
-        document.getElementById('releases-root').innerHTML = '<div class="empty"><h3>Failed to load releases</h3></div>';
+        document.getElementById('releases-root').innerHTML = '<div class="empty"><h3>Failed to load</h3></div>';
         console.error('loadReleases:', err);
     });
 }
@@ -383,7 +600,7 @@ function buildProjectsHTML(projects) {
     }
     return projects.map(function(p) {
         var sub = p.last_refresh ? 'Refreshed ' + fmtAge(p.last_refresh) : 'Never refreshed';
-        return '<div class="card proj-card" data-id="' + esc(p.id) + '">' +
+        return '<div class="card proj-card">' +
             '<div class="proj-card-info">' +
                 '<div class="proj-card-name">' + esc(p.name) + '</div>' +
                 '<div class="proj-card-meta">' +
@@ -409,7 +626,7 @@ function loadProjects() {
             document.getElementById('projects-root').innerHTML = buildProjectsHTML(projects);
         })
         .catch(function(err) {
-            document.getElementById('projects-root').innerHTML = '<div class="empty"><h3>Failed to load projects</h3></div>';
+            document.getElementById('projects-root').innerHTML = '<div class="empty"><h3>Failed to load</h3></div>';
             console.error('loadProjects:', err);
         });
 }
@@ -422,18 +639,16 @@ function doRefresh(btn) {
     fetch('/api/refresh?id=' + encodeURIComponent(id), { method: 'POST' })
         .then(function(r) {
             if (r.ok) {
-                toast('Refresh queued — data updates in a moment.', 'inf');
+                toast('Refresh queued — data updates shortly.', 'inf');
                 setTimeout(function() { loadProjects(); loadReleases(); }, 2000);
             } else {
                 toast('Refresh failed.', 'err');
-                btn.disabled = false;
-                btn.textContent = orig;
+                btn.disabled = false; btn.textContent = orig;
             }
         })
         .catch(function(err) {
-            toast('Refresh error: ' + err, 'err');
-            btn.disabled = false;
-            btn.textContent = orig;
+            toast('Error: ' + err, 'err');
+            btn.disabled = false; btn.textContent = orig;
         });
 }
 
@@ -451,15 +666,89 @@ function doDelete(btn) {
                 loadReleases();
             } else {
                 toast('Delete failed.', 'err');
-                btn.disabled = false;
-                btn.textContent = 'Delete';
+                btn.disabled = false; btn.textContent = 'Delete';
             }
         })
         .catch(function(err) {
-            toast('Delete error: ' + err, 'err');
-            btn.disabled = false;
-            btn.textContent = 'Delete';
+            toast('Error: ' + err, 'err');
+            btn.disabled = false; btn.textContent = 'Delete';
         });
+}
+
+// ---- Platform autofill ----
+var platformConfig = {
+    github: {
+        label: 'Repository',
+        placeholder: 'owner/repo  (e.g., kubernetes/kubernetes)',
+        hint: 'Short owner/repo or paste a full GitHub URL'
+    },
+    gitlab: {
+        label: 'Repository',
+        placeholder: 'owner/repo  (e.g., gitlab-org/gitlab)',
+        hint: 'Short owner/repo or paste a full GitLab URL'
+    },
+    npm: {
+        label: 'Package name',
+        placeholder: 'e.g., react  or  @scope/package',
+        hint: 'Exact package name from npmjs.com'
+    },
+    pypi: {
+        label: 'Package name',
+        placeholder: 'e.g., requests',
+        hint: 'Exact package name from pypi.org'
+    },
+    docker: {
+        label: 'Image name',
+        placeholder: 'e.g., nginx  or  username/image',
+        hint: 'Docker Hub image name (official images: just the name)'
+    }
+};
+
+function onPlatformChange() {
+    var platform = document.getElementById('add-platform').value;
+    var cfg = platformConfig[platform] || {};
+    document.getElementById('add-repo-label').textContent = cfg.label || 'Repository URL';
+    document.getElementById('add-repo-url').placeholder = cfg.placeholder || '';
+    document.getElementById('add-repo-hint').textContent = cfg.hint || '';
+    document.getElementById('add-repo-url').value = '';
+    document.getElementById('add-name').value = '';
+}
+
+function autoFillName() {
+    var platform = document.getElementById('add-platform').value;
+    var val = document.getElementById('add-repo-url').value.trim();
+    var nameInput = document.getElementById('add-name');
+    var name = '';
+    if (platform === 'github' || platform === 'gitlab') {
+        // strip host if user pasted a full URL
+        var path = val
+            .replace(/^https?:\/\/(github|gitlab)\.com\//, '')
+            .replace(/\.git$/, '').replace(/\/$/, '');
+        var parts = path.split('/').filter(Boolean);
+        name = parts.length >= 2 ? parts[1] : (parts[0] || '');
+    } else {
+        // npm / pypi / docker: the identifier is the name
+        name = val;
+    }
+    nameInput.value = name;
+}
+
+function expandRepoURL(platform, input) {
+    input = input.trim().replace(/\.git$/, '').replace(/\/$/, '');
+    switch (platform) {
+        case 'github':
+            return input.startsWith('http') ? input : 'https://github.com/' + input;
+        case 'gitlab':
+            return input.startsWith('http') ? input : 'https://gitlab.com/' + input;
+        case 'npm':
+            return 'https://www.npmjs.com/package/' + input;
+        case 'pypi':
+            return 'https://pypi.org/project/' + input;
+        case 'docker':
+            var ref = input.indexOf('/') !== -1 ? input : 'library/' + input;
+            return 'https://hub.docker.com/r/' + ref;
+    }
+    return input;
 }
 
 // ---- Add project ----
@@ -468,11 +757,11 @@ document.getElementById('add-form').addEventListener('submit', function(e) {
     var btn = document.getElementById('add-btn');
     var data = {};
     new FormData(e.target).forEach(function(v, k) { data[k] = v; });
-    btn.disabled = true;
-    btn.textContent = 'Adding...';
+    data.repo_url = expandRepoURL(data.platform, data.repo_url);
+    btn.disabled = true; btn.textContent = 'Adding...';
     fetch('/api/projects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
     }).then(function(r) {
         if (!r.ok) return r.text().then(function(t) { throw new Error(t || 'Server error'); });
@@ -482,15 +771,13 @@ document.getElementById('add-form').addEventListener('submit', function(e) {
     }).catch(function(err) {
         toast('Error: ' + err, 'err');
     }).finally(function() {
-        btn.disabled = false;
-        btn.textContent = 'Add Project';
+        btn.disabled = false; btn.textContent = 'Add Project';
     });
 });
 
-// ---- Init ----
-fetch('/api/refresh-check').catch(function() {});
-loadReleases();
-loadProjects();
+// ---- Boot ----
+onPlatformChange();
+init();
 </script>
 </body>
 </html>
