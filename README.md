@@ -26,15 +26,16 @@ Register an account on first visit, then add projects to track.
 
 Select a platform, enter the identifier, and a display name is auto-filled:
 
-| Platform   | Enter            | Example                  |
-|------------|------------------|--------------------------|
-| GitHub     | `owner/repo`     | `kubernetes/kubernetes`  |
-| GitLab     | `owner/repo`     | `gitlab-org/gitlab`      |
-| NPM        | package name     | `react`                  |
-| PyPI       | package name     | `requests`               |
-| Docker Hub | image name       | `nginx` or `user/image`  |
+| Platform          | Enter                  | Example                                     |
+|-------------------|------------------------|---------------------------------------------|
+| GitHub            | `owner/repo`           | `kubernetes/kubernetes`                     |
+| GitLab            | `owner/repo`           | `gitlab-org/gitlab`                         |
+| NPM               | package name           | `react`                                     |
+| PyPI              | package name           | `requests`                                  |
+| Docker Hub        | image name             | `nginx` or `user/image`                     |
+| Other / Custom URL | paste any supported URL | `https://github.com/owner/repo` — platform auto-detected |
 
-Full URLs are also accepted for GitHub and GitLab.
+Full URLs are also accepted for GitHub and GitLab in their dedicated fields. The "Other" option accepts any URL from a supported platform and detects it automatically.
 
 ## API
 

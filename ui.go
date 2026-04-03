@@ -357,6 +357,7 @@ body {
                         <option value="npm">NPM</option>
                         <option value="pypi">PyPI</option>
                         <option value="docker">Docker Hub</option>
+                        <option value="other">Other / Custom URL</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -701,6 +702,11 @@ var platformConfig = {
         label: 'Image name',
         placeholder: 'e.g., nginx  or  username/image',
         hint: 'Docker Hub image name (official images: just the name)'
+    },
+    other: {
+        label: 'URL',
+        placeholder: 'Paste any supported project URL',
+        hint: 'Supports GitHub, GitLab, npmjs.com, pypi.org, hub.docker.com'
     }
 };
 
@@ -709,25 +715,74 @@ function onPlatformChange() {
     var cfg = platformConfig[platform] || {};
     document.getElementById('add-repo-label').textContent = cfg.label || 'Repository URL';
     document.getElementById('add-repo-url').placeholder = cfg.placeholder || '';
-    document.getElementById('add-repo-hint').textContent = cfg.hint || '';
+    var hintEl = document.getElementById('add-repo-hint');
+    hintEl.textContent = cfg.hint || '';
+    hintEl.style.color = '#475569';
     document.getElementById('add-repo-url').value = '';
     document.getElementById('add-name').value = '';
+}
+
+function detectPlatform(url) {
+    if (/github\.com\//.test(url))           return 'github';
+    if (/gitlab\.com\//.test(url))           return 'gitlab';
+    if (/npmjs\.com\/package\//.test(url))   return 'npm';
+    if (/pypi\.org\/project\//.test(url))    return 'pypi';
+    if (/hub\.docker\.com\/r\//.test(url))   return 'docker';
+    return null;
+}
+
+function extractNameFromURL(platform, url) {
+    switch (platform) {
+        case 'github':
+        case 'gitlab': {
+            var path = url
+                .replace(/^https?:\/\/(github|gitlab)\.com\//, '')
+                .replace(/\.git$/, '').replace(/\/$/, '');
+            var parts = path.split('/').filter(Boolean);
+            return parts.length >= 2 ? parts[1] : (parts[0] || '');
+        }
+        case 'npm':
+            return url.replace(/^.*npmjs\.com\/package\//, '').split('/')[0];
+        case 'pypi':
+            return url.replace(/^.*pypi\.org\/project\//, '').split('/')[0];
+        case 'docker':
+            return url.replace(/^.*hub\.docker\.com\/r\//, '').replace(/\/.*$/, '');
+    }
+    return '';
 }
 
 function autoFillName() {
     var platform = document.getElementById('add-platform').value;
     var val = document.getElementById('add-repo-url').value.trim();
     var nameInput = document.getElementById('add-name');
+    var hintEl = document.getElementById('add-repo-hint');
+
+    if (platform === 'other') {
+        var detected = detectPlatform(val);
+        if (detected) {
+            hintEl.textContent = 'Detected: ' + detected;
+            hintEl.style.color = '#4ade80';
+            nameInput.value = extractNameFromURL(detected, val);
+        } else if (val) {
+            hintEl.textContent = 'URL not recognized — supported: GitHub, GitLab, npmjs.com, pypi.org, hub.docker.com';
+            hintEl.style.color = '#f87171';
+            nameInput.value = '';
+        } else {
+            hintEl.textContent = platformConfig.other.hint;
+            hintEl.style.color = '#475569';
+            nameInput.value = '';
+        }
+        return;
+    }
+
     var name = '';
     if (platform === 'github' || platform === 'gitlab') {
-        // strip host if user pasted a full URL
         var path = val
             .replace(/^https?:\/\/(github|gitlab)\.com\//, '')
             .replace(/\.git$/, '').replace(/\/$/, '');
         var parts = path.split('/').filter(Boolean);
         name = parts.length >= 2 ? parts[1] : (parts[0] || '');
     } else {
-        // npm / pypi / docker: the identifier is the name
         name = val;
     }
     nameInput.value = name;
@@ -757,7 +812,24 @@ document.getElementById('add-form').addEventListener('submit', function(e) {
     var btn = document.getElementById('add-btn');
     var data = {};
     new FormData(e.target).forEach(function(v, k) { data[k] = v; });
-    data.repo_url = expandRepoURL(data.platform, data.repo_url);
+
+    if (data.platform === 'other') {
+        var detected = detectPlatform(data.repo_url);
+        if (!detected) {
+            toast('URL not recognized. Supported: GitHub, GitLab, npmjs.com, pypi.org, hub.docker.com', 'err');
+            return;
+        }
+        data.platform = detected;
+        // For npm/pypi the fetcher uses project.Name — extract it from the URL
+        if (detected === 'npm' || detected === 'pypi') {
+            data.name = extractNameFromURL(detected, data.repo_url);
+        }
+        // repo_url is already a full URL — normalize trailing slash / .git only
+        data.repo_url = data.repo_url.trim().replace(/\.git$/, '').replace(/\/$/, '');
+    } else {
+        data.repo_url = expandRepoURL(data.platform, data.repo_url);
+    }
+
     btn.disabled = true; btn.textContent = 'Adding...';
     fetch('/api/projects', {
         method: 'POST',

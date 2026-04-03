@@ -3,18 +3,27 @@
 ## In Progress
 
 ## Planned
-- [ ] **Custom URL option** — "Other" platform entry where a full URL is pasted and the platform is auto-detected
-- [ ] **Browser push notifications** — service worker + VAPID keys + push subscriptions stored per user; notify on new release
+- [ ] **Browser push notifications** — service worker + VAPID keys + push subscriptions stored per user; notify on new release (user option per project)
 - [ ] **Webhooks** — per-project outbound webhook URLs; HMAC-SHA256 signed POST payload on new release
 - [ ] **Add Project side panel** — move the Add Project form to a slide-in panel on the right side of the Releases page (eliminate the Projects tab)
-- [ ] **Limit releases per project** — show only the 5 most recent releases per project card, with a "Show all" expand link
-- [ ] **Inline project controls** — add Refresh and Delete buttons directly on the project headers in the Releases view
+- [ ] **Limit releases per project** — show only the 5 most recent releases per project card, with a "more" expand link, list the releases on the same line
+- [ ] **Inline project controls** — add Refresh and Delete buttons directly on the project headers in the Releases view, like an X to delete and an options button to set webhooks, push notifications, email.
+- [ ] **Email validation of users** - send an email and a verification link to the user to validate their email
+- [ ] **Add Send Email Summary** - to send an email once a day of the previous day's updates (user Option)
+- [ ] **Add immediate email** - to send an when a new release is detected. (user option per project)
+- [ ] **Pagenate releases and projects** - Allow the user to set the number of projects per page between 5,10 and 20.  Pagenate beyond that number.
+- [ ] **Main page sort options** - sort by date added, latest release, and alphabetically.
+- [ ] **Determine if a release is a prerelease or not** - allow the user per project to be notified about prereleases.
+- [ ] **Use project icon** - Put the project icon to the left of the project name.  
+
+
 
 ## Done
 
 - [x] **User accounts with auth** — register/login/logout, session cookies, per-user project tracking
 - [x] **Shared release data** — deduplicated repos table; two users adding the same project share one release record
 - [x] **Smart URL autofill** — platform-aware input: `owner/repo` for GitHub/GitLab, package name for npm/PyPI, image name for Docker; auto-fills display name
+- [x] **Other / Custom URL** — paste any supported URL; platform auto-detected with live feedback, name auto-filled
 - [x] Split monolith `main.go` into focused files (`handlers.go`, `store.go`, `fetchers.go`, `models.go`, `ui.go`)
 - [x] Migrate state storage from JSON/YAML to SQLite (WAL mode, `modernc.org/sqlite`)
 - [x] Fix delete bug (was re-seeding on restart, wiping unrelated projects)
