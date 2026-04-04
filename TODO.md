@@ -3,9 +3,6 @@
 ## In Progress
 
 ## Planned
-- [x] **Add Project side panel** — move the Add Project form to a slide-in panel on the right side of the Releases page (eliminate the Projects tab)
-- [ ] **Limit releases per project** — show only the 5 most recent releases per project card, with a "more" expand link, list the releases on the same line
-- [x] **Inline project controls** — add Refresh and Delete buttons directly on the project headers in the Releases view, like an X to delete and an options button to set webhooks, push notifications, email.
 - [ ] **Email validation of users** - send an email and a verification link to the user to validate their email
 - [ ] **Add Send Email Summary** - to send an email once a day of the previous day's updates (user Option)
 - [ ] **Add immediate email** - to send an when a new release is detected. (user option per project)
@@ -24,6 +21,9 @@
 - [x] **Other / Custom URL** — paste any supported URL; platform auto-detected with live feedback, name auto-filled
 - [x] **Browser push notifications** — VAPID keys auto-generated and persisted; service worker at `/sw.js`; 🔔 button in header; notifies all subscribed users when a new release is detected on refresh
 - [x] **Webhooks** — per-project webhook URLs with optional HMAC-SHA256 secret; managed inline from the Projects tab; fired alongside push notifications on new releases
+- [x] **Add Project side panel** — Add Project form in a slide-in panel on the right side of the Releases page (Projects tab eliminated)
+- [x] **Inline project controls** — Refresh and Delete buttons directly on project headers in Releases view; settings panel for webhooks, push notifications, email
+- [x] **Limit releases per project** — inline chip line shows 5 most recent (age: version); +N more ▾ expands full stacked list
 - [x] Split monolith `main.go` into focused files (`handlers.go`, `store.go`, `fetchers.go`, `models.go`, `ui.go`)
 - [x] Migrate state storage from JSON/YAML to SQLite (WAL mode, `modernc.org/sqlite`)
 - [x] Fix delete bug (was re-seeding on restart, wiping unrelated projects)
