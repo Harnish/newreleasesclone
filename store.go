@@ -181,6 +181,27 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 6 {
+		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("failed to migrate to v6 (email): %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("failed to migrate to v6 (email_verified): %w", err)
+		}
+		if _, err := db.Exec(`
+			CREATE TABLE IF NOT EXISTS email_verification_tokens (
+				token      TEXT PRIMARY KEY,
+				user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				expires_at TEXT NOT NULL
+			)
+		`); err != nil {
+			return fmt.Errorf("failed to migrate to v6 (tokens table): %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 6"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -455,9 +476,10 @@ func (s *Store) CreateUser(username, password string) (*User, error) {
 func (s *Store) AuthenticateUser(username, password string) (*User, error) {
 	var u User
 	var hash string
+	var emailVerified int
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash FROM users WHERE username = ?", username,
-	).Scan(&u.ID, &u.Username, &hash)
+		"SELECT id, username, password_hash, email, email_verified FROM users WHERE username = ?", username,
+	).Scan(&u.ID, &u.Username, &hash, &u.Email, &emailVerified)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("invalid credentials")
 	}
@@ -467,6 +489,7 @@ func (s *Store) AuthenticateUser(username, password string) (*User, error) {
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
 		return nil, fmt.Errorf("invalid credentials")
 	}
+	u.EmailVerified = emailVerified == 1
 	return &u, nil
 }
 
@@ -499,10 +522,14 @@ func (s *Store) DeleteSession(sessionID string) {
 
 func (s *Store) GetUserByID(userID string) (*User, error) {
 	var u User
-	err := s.db.QueryRow("SELECT id, username FROM users WHERE id = ?", userID).Scan(&u.ID, &u.Username)
+	var emailVerified int
+	err := s.db.QueryRow(
+		"SELECT id, username, email, email_verified FROM users WHERE id = ?", userID,
+	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified)
 	if err != nil {
 		return nil, err
 	}
+	u.EmailVerified = emailVerified == 1
 	return &u, nil
 }
 

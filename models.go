@@ -3,8 +3,10 @@ package main
 import "time"
 
 type User struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
+	ID            string `json:"id"`
+	Username      string `json:"username"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
 }
 
 type Release struct {

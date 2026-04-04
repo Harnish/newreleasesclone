@@ -779,3 +779,22 @@ func BenchmarkTruncate(b *testing.B) {
 		_ = truncate(longString, 200)
 	}
 }
+
+func TestStoreEmailFields(t *testing.T) {
+	s := newTestStore(t)
+	user, err := s.CreateUser("emailuser", "password123")
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	got, err := s.GetUserByID(user.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID failed: %v", err)
+	}
+	if got.Email != "" {
+		t.Errorf("expected empty email, got %q", got.Email)
+	}
+	if got.EmailVerified {
+		t.Error("expected email_verified false for new user")
+	}
+}
