@@ -967,3 +967,82 @@ func TestHandleRegisterMissingEmail(t *testing.T) {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
+
+func TestHandleVerifyEmail(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	user, _ := store.CreateUser("verifyuser", "password123")
+	store.SetUserEmail(user.ID, "verify@example.com")
+	token, _ := store.CreateVerificationToken(user.ID)
+
+	req, _ := http.NewRequest("GET", "/verify-email?token="+token, nil)
+	w := httptest.NewRecorder()
+	handleVerifyEmail(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302 redirect, got %d", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/?verified=1" {
+		t.Errorf("expected redirect to /?verified=1, got %q", loc)
+	}
+
+	got, _ := store.GetUserByID(user.ID)
+	if !got.EmailVerified {
+		t.Error("expected email_verified true after verification")
+	}
+}
+
+func TestHandleVerifyEmailInvalidToken(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	req, _ := http.NewRequest("GET", "/verify-email?token=badtoken", nil)
+	w := httptest.NewRecorder()
+	handleVerifyEmail(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302 redirect, got %d", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/?verify_error=1" {
+		t.Errorf("expected redirect to /?verify_error=1, got %q", loc)
+	}
+}
+
+func TestHandleResendVerification(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+	userID, cookie := newTestAuth(t, store)
+	store.SetUserEmail(userID, "resend@example.com")
+
+	req, _ := http.NewRequest("POST", "/api/resend-verification", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleResendVerification).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleResendVerificationAlreadyVerified(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+	userID, cookie := newTestAuth(t, store)
+	store.SetUserEmail(userID, "done@example.com")
+	// Mark verified directly
+	store.db.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", userID)
+
+	req, _ := http.NewRequest("POST", "/api/resend-verification", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleResendVerification).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}

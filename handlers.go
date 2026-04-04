@@ -5,12 +5,18 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
 // smtpCfg and smtpEnabled are initialized in main() via SMTPConfigFromEnv.
 var smtpCfg SMTPConfig
 var smtpEnabled bool
+
+var (
+	resendMu       sync.Mutex
+	resendAttempts = map[string][]time.Time{}
+)
 
 // getSessionUser extracts the authenticated user ID from the session cookie.
 func getSessionUser(r *http.Request) (string, bool) {
@@ -55,6 +61,67 @@ func handleMe(w http.ResponseWriter, r *http.Request, userID string) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+
+// GET /verify-email?token=xxx — verifies email token, redirects with result query param.
+func handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Redirect(w, r, "/?verify_error=1", http.StatusFound)
+		return
+	}
+	if _, err := store.VerifyEmailToken(token); err != nil {
+		http.Redirect(w, r, "/?verify_error=1", http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/?verified=1", http.StatusFound)
+}
+
+// POST /api/resend-verification — resends verification email; requires auth.
+func handleResendVerification(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	user, err := store.GetUserByID(userID)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+	if user.EmailVerified {
+		http.Error(w, "Email already verified", http.StatusBadRequest)
+		return
+	}
+	// Rate limit: max 3 resends per 10 minutes per user.
+	resendMu.Lock()
+	now := time.Now()
+	cutoff := now.Add(-10 * time.Minute)
+	var recent []time.Time
+	for _, t := range resendAttempts[userID] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= 3 {
+		resendMu.Unlock()
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+	resendAttempts[userID] = append(recent, now)
+	resendMu.Unlock()
+
+	token, err := store.CreateVerificationToken(userID)
+	if err != nil {
+		http.Error(w, "Failed to create token", http.StatusInternalServerError)
+		return
+	}
+	if smtpEnabled {
+		if err := smtpCfg.SendVerificationEmail(user.Email, token, requestBaseURL(r)); err != nil {
+			log.Printf("⚠ failed to resend verification email to %s: %v", user.Email, err)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
 }
 
 // POST /api/register
