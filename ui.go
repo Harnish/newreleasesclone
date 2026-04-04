@@ -257,11 +257,28 @@ body {
 .proj-name { font-weight: 600; font-size: 0.95rem; }
 .proj-right { display: flex; align-items: center; gap: 0.75rem; }
 .ver-count { color: #64748b; font-size: 0.78rem; }
-.chevron { color: #64748b; font-size: 0.7rem; transition: transform 0.2s; display: inline-block; }
-.chevron.open { transform: rotate(180deg); }
-
-.ver-list { display: none; border-top: 1px solid #334155; }
-.ver-list.open { display: block; }
+.ver-chips {
+    padding: 0.55rem 1.1rem;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.15rem;
+    border-top: 1px solid #334155;
+}
+.ver-chip-more {
+    background: none;
+    border: none;
+    color: #60a5fa;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 0.35rem;
+}
+.ver-chip-more:hover { text-decoration: underline; }
+.ver-more-list { display: none; border-top: 1px solid #334155; }
+.ver-more-list.open { display: block; }
 
 .ver-row {
     padding: 0.75rem 1.1rem;
@@ -498,11 +515,14 @@ function fmtAge(iso) {
     var m = Math.floor(diff / 60000);
     var h = Math.floor(diff / 3600000);
     var d = Math.floor(diff / 86400000);
-    if (m < 2)  return 'just now';
-    if (m < 60) return m + 'm ago';
-    if (h < 24) return h + 'h ago';
-    if (d < 30) return d + 'd ago';
-    return new Date(iso).toLocaleDateString();
+    var w = Math.floor(d / 7);
+    var mo = Math.floor(d / 30);
+    if (m < 2)   return 'just now';
+    if (m < 60)  return m + ' min' + (m === 1 ? '' : 's') + ' ago';
+    if (h < 24)  return h + ' hr' + (h === 1 ? '' : 's') + ' ago';
+    if (d < 7)   return d + ' day' + (d === 1 ? '' : 's') + ' ago';
+    if (d < 30)  return w + ' wk' + (w === 1 ? '' : 's') + ' ago';
+    return mo + ' mth' + (mo === 1 ? '' : 's') + ' ago';
 }
 
 // ---- Auth page ----
@@ -639,7 +659,20 @@ function buildReleasesHTML(releases, projects) {
         var platform = proj ? proj.platform : '';
         var rels = groups[pid];
 
-        var rows = rels.map(function(r) {
+        var visible = rels.slice(0, 5);
+        var hidden  = rels.slice(5);
+
+        var chips = visible.map(function(r, i) {
+            return fmtAge(r.published_at) + ': ' + esc(r.version) +
+                (i < visible.length - 1 || hidden.length > 0 ? ',&nbsp; ' : '');
+        }).join('');
+
+        var moreBtn = hidden.length > 0
+            ? '<button class="ver-chip-more" data-count="' + hidden.length + '" ' +
+              'onclick="toggleMore(this)">+' + hidden.length + ' more \u25BE</button>'
+            : '';
+
+        var allRows = rels.map(function(r) {
             var notes = r.release_notes || r.description || '';
             return '<div class="ver-row" onclick="toggleNotes(this)">' +
                 '<div class="ver-top">' +
@@ -654,7 +687,7 @@ function buildReleasesHTML(releases, projects) {
         }).join('');
 
         return '<div class="card">' +
-            '<div class="proj-header" onclick="toggleGroup(this)">' +
+            '<div class="proj-header">' +
                 '<div class="proj-header-left">' +
                     '<span class="proj-name">' + esc(pname) + '</span>' +
                     (platform ? '<span class="badge ' + esc(platform) + '">' + esc(platform) + '</span>' : '') +
@@ -662,28 +695,27 @@ function buildReleasesHTML(releases, projects) {
                 '<div class="proj-right">' +
                     '<button class="btn btn-ghost proj-ctrl" title="Refresh" ' +
                         'data-id="' + esc(pid) + '" ' +
-                        'onclick="event.stopPropagation();doRefresh(this)">&#x21BB;</button>' +
+                        'onclick="doRefresh(this)">&#x21BB;</button>' +
                     '<button class="btn btn-ghost proj-ctrl" title="Settings" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
                         'data-push="' + (proj && proj.push_enabled ? '1' : '0') + '" ' +
-                        'onclick="event.stopPropagation();openSettingsPanel(this)">&#x2699;</button>' +
+                        'onclick="openSettingsPanel(this)">&#x2699;</button>' +
                     '<button class="btn btn-ghost proj-ctrl" title="Delete" style="color:#f87171" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
-                        'onclick="event.stopPropagation();doDelete(this)">&#x2715;</button>' +
-                    '<span class="ver-count">' + rels.length + ' versions</span>' +
-                    '<span class="chevron">&#x25BC;</span>' +
+                        'onclick="doDelete(this)">&#x2715;</button>' +
+                    '<span class="ver-count">' + rels.length + ' version' + (rels.length === 1 ? '' : 's') + '</span>' +
                 '</div>' +
             '</div>' +
-            '<div class="ver-list">' + rows + '</div>' +
+            '<div class="ver-chips">' + chips + moreBtn + '</div>' +
+            '<div class="ver-more-list">' + allRows + '</div>' +
         '</div>';
     }).join('');
 }
 
-function toggleGroup(header) {
-    var list = header.nextElementSibling;
-    var ch = header.querySelector('.chevron');
+function toggleMore(btn) {
+    var list = btn.closest('.ver-chips').nextElementSibling;
     var open = list.classList.toggle('open');
-    ch.classList.toggle('open', open);
+    btn.textContent = open ? '\u25B4 less' : '+' + btn.dataset.count + ' more \u25BE';
 }
 
 function toggleNotes(row) {
