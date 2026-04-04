@@ -798,3 +798,93 @@ func TestStoreEmailFields(t *testing.T) {
 		t.Error("expected email_verified false for new user")
 	}
 }
+
+func TestStoreSetUserEmail(t *testing.T) {
+	s := newTestStore(t)
+	user, _ := s.CreateUser("emailtest", "password123")
+
+	if err := s.SetUserEmail(user.ID, "test@example.com"); err != nil {
+		t.Fatalf("SetUserEmail failed: %v", err)
+	}
+	got, _ := s.GetUserByID(user.ID)
+	if got.Email != "test@example.com" {
+		t.Errorf("expected email test@example.com, got %q", got.Email)
+	}
+}
+
+func TestStoreVerificationToken(t *testing.T) {
+	s := newTestStore(t)
+	user, _ := s.CreateUser("tokentest", "password123")
+	s.SetUserEmail(user.ID, "token@example.com")
+
+	token, err := s.CreateVerificationToken(user.ID)
+	if err != nil {
+		t.Fatalf("CreateVerificationToken failed: %v", err)
+	}
+	if len(token) == 0 {
+		t.Fatal("expected non-empty token")
+	}
+
+	// Verify it
+	gotUserID, err := s.VerifyEmailToken(token)
+	if err != nil {
+		t.Fatalf("VerifyEmailToken failed: %v", err)
+	}
+	if gotUserID != user.ID {
+		t.Errorf("expected userID %s, got %s", user.ID, gotUserID)
+	}
+
+	// User should now be verified
+	got, _ := s.GetUserByID(user.ID)
+	if !got.EmailVerified {
+		t.Error("expected email_verified true after verification")
+	}
+
+	// Token should be consumed
+	_, err = s.VerifyEmailToken(token)
+	if err != ErrTokenNotFound {
+		t.Errorf("expected ErrTokenNotFound after use, got %v", err)
+	}
+}
+
+func TestStoreVerifyEmailTokenExpired(t *testing.T) {
+	s := newTestStore(t)
+	user, _ := s.CreateUser("expiretest", "password123")
+
+	// Insert an already-expired token directly
+	expiredAt := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+	s.db.Exec(
+		"INSERT INTO email_verification_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
+		"expiredtoken", user.ID, expiredAt,
+	)
+
+	_, err := s.VerifyEmailToken("expiredtoken")
+	if err != ErrTokenExpired {
+		t.Errorf("expected ErrTokenExpired, got %v", err)
+	}
+}
+
+func TestStoreVerifyEmailTokenNotFound(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.VerifyEmailToken("doesnotexist")
+	if err != ErrTokenNotFound {
+		t.Errorf("expected ErrTokenNotFound, got %v", err)
+	}
+}
+
+func TestStoreCreateVerificationTokenDeletesOld(t *testing.T) {
+	s := newTestStore(t)
+	user, _ := s.CreateUser("reusetest", "password123")
+
+	token1, _ := s.CreateVerificationToken(user.ID)
+	token2, _ := s.CreateVerificationToken(user.ID)
+
+	if token1 == token2 {
+		t.Error("expected different tokens")
+	}
+	// Old token should be gone
+	_, err := s.VerifyEmailToken(token1)
+	if err != ErrTokenNotFound {
+		t.Errorf("expected old token deleted, got %v", err)
+	}
+}

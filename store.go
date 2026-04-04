@@ -533,6 +533,55 @@ func (s *Store) GetUserByID(userID string) (*User, error) {
 	return &u, nil
 }
 
+var (
+	ErrTokenNotFound = fmt.Errorf("token not found")
+	ErrTokenExpired  = fmt.Errorf("token expired")
+)
+
+func (s *Store) SetUserEmail(userID, email string) error {
+	_, err := s.db.Exec("UPDATE users SET email = ? WHERE id = ?", email, userID)
+	return err
+}
+
+func (s *Store) CreateVerificationToken(userID string) (string, error) {
+	s.db.Exec("DELETE FROM email_verification_tokens WHERE user_id = ?", userID)
+	token := generateToken()
+	expires := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
+	_, err := s.db.Exec(
+		"INSERT INTO email_verification_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
+		token, userID, expires,
+	)
+	return token, err
+}
+
+func (s *Store) VerifyEmailToken(token string) (string, error) {
+	var userID, expiresAt string
+	err := s.db.QueryRow(
+		"SELECT user_id, expires_at FROM email_verification_tokens WHERE token = ?", token,
+	).Scan(&userID, &expiresAt)
+	if err == sql.ErrNoRows {
+		return "", ErrTokenNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	t, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil || time.Now().After(t) {
+		s.db.Exec("DELETE FROM email_verification_tokens WHERE token = ?", token)
+		return "", ErrTokenExpired
+	}
+	if _, err = s.db.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", userID); err != nil {
+		return "", err
+	}
+	s.db.Exec("DELETE FROM email_verification_tokens WHERE token = ?", token)
+	return userID, nil
+}
+
+func (s *Store) DeleteVerificationTokensForUser(userID string) error {
+	_, err := s.db.Exec("DELETE FROM email_verification_tokens WHERE user_id = ?", userID)
+	return err
+}
+
 // ---- Repos (shared, deduped by platform+url) ----
 
 // AddRepo finds or creates the shared repo record, then adds it to the user's
