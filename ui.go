@@ -420,6 +420,10 @@ body {
             <label>Password <span style="color:#475569">(min 8 chars)</span></label>
             <input type="password" name="password" required minlength="8" autocomplete="new-password">
         </div>
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" required autocomplete="email">
+        </div>
         <button type="submit" class="btn btn-primary" style="width:100%" id="register-btn">Create Account</button>
     </form>
 </div>
@@ -440,6 +444,11 @@ body {
 </header>
 
 <div id="toast" class="toast"></div>
+<div id="verify-banner" style="display:none;background:#422006;color:#fbbf24;border-bottom:1px solid #92400e;padding:0.6rem 1.1rem;font-size:0.85rem">
+    Please verify your email address.
+    <button onclick="doResendVerification()" style="background:none;border:none;color:#fbbf24;text-decoration:underline;cursor:pointer;font-size:0.85rem;margin-left:0.5rem">Resend verification email</button>
+    <button onclick="dismissVerifyBanner()" style="background:none;border:none;color:#fbbf24;cursor:pointer;float:right;font-size:1rem">&#x2715;</button>
+</div>
 
 <div class="content">
     <div class="releases-header">
@@ -604,12 +613,45 @@ function showApp() {
     document.getElementById('auth-page').style.display = 'none';
     document.getElementById('app-page').style.display = '';
     document.getElementById('username-display').textContent = currentUser.username;
+    updateVerifyBanner();
     fetch('/api/refresh-check').catch(function() {});
     initNotifications();
     loadReleases();
 }
 
+function updateVerifyBanner() {
+    var banner = document.getElementById('verify-banner');
+    if (currentUser && !currentUser.email_verified && currentUser.email) {
+        banner.style.display = '';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
+function dismissVerifyBanner() {
+    document.getElementById('verify-banner').style.display = 'none';
+}
+
+function doResendVerification() {
+    fetch('/api/resend-verification', { method: 'POST' })
+        .then(function(r) {
+            if (r.status === 429) throw new Error('Too many attempts. Try again later.');
+            if (!r.ok) throw new Error('Failed to resend.');
+            return r.json();
+        })
+        .then(function() {
+            toast('Verification email sent! Check your inbox.', 'ok');
+        })
+        .catch(function(err) {
+            toast(err.message, 'err');
+        });
+}
+
 function init() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === '1' || params.get('verify_error') === '1') {
+        history.replaceState(null, '', '/');
+    }
     fetch('/api/me')
         .then(function(r) {
             if (!r.ok) throw new Error('not authenticated');
@@ -618,6 +660,11 @@ function init() {
         .then(function(user) {
             currentUser = user;
             showApp();
+            if (params.get('verified') === '1') {
+                toast('Email verified!', 'ok');
+            } else if (params.get('verify_error') === '1') {
+                toast('Verification link expired or invalid. Please request a new one.', 'err');
+            }
         })
         .catch(function() {
             document.getElementById('auth-page').style.display = '';
