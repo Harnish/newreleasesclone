@@ -202,6 +202,15 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 7 {
+		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN email_digest INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("failed to migrate to v7 (email_digest): %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 7"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -531,6 +540,66 @@ func (s *Store) GetUserByID(userID string) (*User, error) {
 	}
 	u.EmailVerified = emailVerified == 1
 	return &u, nil
+}
+
+func (s *Store) SetEmailDigest(userID string, enabled bool) error {
+	val := 0
+	if enabled {
+		val = 1
+	}
+	_, err := s.db.Exec("UPDATE users SET email_digest = ? WHERE id = ?", val, userID)
+	return err
+}
+
+func (s *Store) GetUserDigestEnabled(userID string) (bool, error) {
+	var v int
+	err := s.db.QueryRow("SELECT email_digest FROM users WHERE id = ?", userID).Scan(&v)
+	return v == 1, err
+}
+
+func (s *Store) GetDigestUsers() []User {
+	rows, err := s.db.Query(`
+		SELECT id, username, email, email_verified
+		FROM users
+		WHERE email_digest = 1
+		  AND email_verified = 1
+		  AND email != ''`)
+	if err != nil {
+		log.Printf("⚠ GetDigestUsers failed: %v", err)
+		return nil
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		var emailVerified int
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &emailVerified); err != nil {
+			continue
+		}
+		u.EmailVerified = emailVerified == 1
+		users = append(users, u)
+	}
+	return users
+}
+
+func (s *Store) GetReleasesPublishedOn(userID string, date time.Time) []Release {
+	from := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	to := time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	rows, err := s.db.Query(`
+		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url,
+		       r.published_at, r.description, r.release_notes
+		FROM releases r
+		INNER JOIN user_repos ur ON ur.repo_id = r.repo_id
+		WHERE ur.user_id = ?
+		  AND r.published_at >= ?
+		  AND r.published_at < ?
+		ORDER BY r.name ASC, r.published_at DESC`, userID, from, to)
+	if err != nil {
+		log.Printf("⚠ GetReleasesPublishedOn failed for user %s: %v", userID, err)
+		return []Release{}
+	}
+	defer rows.Close()
+	return scanReleases(rows)
 }
 
 var (

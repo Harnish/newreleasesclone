@@ -1115,3 +1115,107 @@ func TestHandleResendVerificationMethodNotAllowed(t *testing.T) {
 		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
+
+func TestSetGetEmailDigest(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+
+	// default is false
+	enabled, err := s.GetUserDigestEnabled(userID)
+	if err != nil {
+		t.Fatalf("GetUserDigestEnabled: %v", err)
+	}
+	if enabled {
+		t.Error("expected email_digest disabled by default")
+	}
+
+	// enable it
+	if err := s.SetEmailDigest(userID, true); err != nil {
+		t.Fatalf("SetEmailDigest true: %v", err)
+	}
+	enabled, err = s.GetUserDigestEnabled(userID)
+	if err != nil {
+		t.Fatalf("GetUserDigestEnabled after set: %v", err)
+	}
+	if !enabled {
+		t.Error("expected email_digest enabled after set")
+	}
+
+	// disable it
+	if err := s.SetEmailDigest(userID, false); err != nil {
+		t.Fatalf("SetEmailDigest false: %v", err)
+	}
+	enabled, _ = s.GetUserDigestEnabled(userID)
+	if enabled {
+		t.Error("expected email_digest disabled after unset")
+	}
+}
+
+func TestGetDigestUsers(t *testing.T) {
+	s := newTestStore(t)
+
+	// u1: digest + verified + email => should appear
+	u1, _ := s.CreateUser("digest1", "password123")
+	s.SetUserEmail(u1.ID, "digest1@example.com")
+	s.db.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", u1.ID)
+	s.SetEmailDigest(u1.ID, true)
+
+	// u2: digest enabled but not verified => should NOT appear
+	u2, _ := s.CreateUser("digest2", "password123")
+	s.SetUserEmail(u2.ID, "digest2@example.com")
+	s.SetEmailDigest(u2.ID, true)
+
+	// u3: verified but digest off => should NOT appear
+	u3, _ := s.CreateUser("digest3", "password123")
+	s.SetUserEmail(u3.ID, "digest3@example.com")
+	s.db.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", u3.ID)
+
+	users := s.GetDigestUsers()
+	if len(users) != 1 {
+		t.Errorf("expected 1 digest user, got %d", len(users))
+	}
+	if len(users) > 0 && users[0].ID != u1.ID {
+		t.Errorf("expected user %s, got %s", u1.ID, users[0].ID)
+	}
+}
+
+func TestGetReleasesPublishedOn(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+
+	repoID, _ := s.AddRepo(userID, Project{
+		Name: "TestProj", Platform: "github",
+		RepoURL: "https://github.com/test/repo",
+	})
+
+	now := time.Now().UTC()
+	yesterday := now.AddDate(0, 0, -1)
+
+	// Release published yesterday (noon UTC) — should appear
+	s.AddRelease(repoID, Release{
+		ID: "rel-yesterday", Name: "TestProj", Version: "v1.0.0",
+		Platform: "github", URL: "https://github.com/test/repo/releases/v1.0.0",
+		PublishedAt: time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 12, 0, 0, 0, time.UTC),
+	})
+	// Release published today — should NOT appear
+	s.AddRelease(repoID, Release{
+		ID: "rel-today", Name: "TestProj", Version: "v1.1.0",
+		Platform: "github", URL: "https://github.com/test/repo/releases/v1.1.0",
+		PublishedAt: time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC),
+	})
+
+	releases := s.GetReleasesPublishedOn(userID, yesterday)
+	if len(releases) != 1 {
+		t.Fatalf("expected 1 release for yesterday, got %d", len(releases))
+	}
+	if releases[0].ID != "rel-yesterday" {
+		t.Errorf("expected rel-yesterday, got %s", releases[0].ID)
+	}
+
+	// Other user should see nothing (no user_repos entry)
+	u2, _ := s.CreateUser("other", "password123")
+	releases2 := s.GetReleasesPublishedOn(u2.ID, yesterday)
+	if len(releases2) != 0 {
+		t.Errorf("expected 0 releases for other user, got %d", len(releases2))
+	}
+}
