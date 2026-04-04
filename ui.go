@@ -167,6 +167,21 @@ body {
     padding: 1.1rem 1rem;
     min-height: 100%;
 }
+/* ---- Account settings panel ---- */
+.account-panel {
+    max-width: 0;
+    overflow: hidden;
+    transition: max-width 0.25s ease;
+    flex-shrink: 0;
+}
+.account-panel.open { max-width: 300px; }
+.account-panel-inner {
+    width: 280px;
+    background: #1a2840;
+    border-left: 1px solid #2d4a6e;
+    padding: 1.1rem 1rem;
+    min-height: 100%;
+}
 .settings-section { margin-bottom: 1.25rem; }
 .settings-section-title {
     font-size: 0.72rem;
@@ -438,6 +453,7 @@ body {
     <span class="app-title">Release Tracker</span>
     <div class="user-info">
         <span class="username" id="username-display"></span>
+        <button class="btn btn-ghost" onclick="openAccountPanel()" title="Account settings" style="font-size:1rem;padding:0.3rem 0.5rem">&#x2699;</button>
         <button class="btn btn-ghost" id="notif-btn" onclick="toggleNotifications()" title="Enable push notifications" style="font-size:1rem;padding:0.3rem 0.5rem">&#x1F514;</button>
         <button class="btn btn-ghost" onclick="doLogout()">Sign out</button>
     </div>
@@ -495,6 +511,15 @@ body {
                     <button class="btn btn-ghost" onclick="closeSettingsPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
                 </div>
                 <div id="settings-panel-body"></div>
+            </div>
+        </div>
+        <div id="account-panel" class="account-panel">
+            <div class="account-panel-inner">
+                <div class="add-panel-title">
+                    Account Settings
+                    <button class="btn btn-ghost" onclick="closeAccountPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                </div>
+                <div id="account-panel-body"></div>
             </div>
         </div>
     </div>
@@ -675,6 +700,7 @@ function init() {
 // ---- Add panel ----
 function toggleAddPanel() {
     closeSettingsPanel();
+    closeAccountPanel();
     var panel = document.getElementById('add-panel');
     panel.classList.toggle('open');
 }
@@ -683,8 +709,97 @@ function closeAddPanel() {
     document.getElementById('add-panel').classList.remove('open');
 }
 
+// ---- Account panel ----
+function openAccountPanel() {
+    closeAddPanel();
+    closeSettingsPanel();
+    document.getElementById('account-panel').classList.add('open');
+    loadAccountPanel();
+}
+
+function closeAccountPanel() {
+    document.getElementById('account-panel').classList.remove('open');
+}
+
+function loadAccountPanel() {
+    var body = document.getElementById('account-panel-body');
+
+    // Show loading indicator
+    body.textContent = '';
+    var loading = document.createElement('div');
+    loading.style.cssText = 'font-size:0.85rem;color:#64748b';
+    loading.textContent = 'Loading...';
+    body.appendChild(loading);
+
+    fetch('/api/account-settings')
+        .then(function(r) { return r.json(); })
+        .then(function(settings) {
+            var smtpOk = !!(currentUser && currentUser.smtp_enabled);
+            var verifiedOk = !!(currentUser && currentUser.email_verified);
+            var canUse = smtpOk && verifiedOk;
+            var title = !smtpOk ? 'Email not configured' : (!verifiedOk ? 'Verify your email to enable' : '');
+
+            body.textContent = '';
+
+            // Username row
+            var userSection = document.createElement('div');
+            userSection.style.marginBottom = '1rem';
+            var userLabel = document.createElement('div');
+            userLabel.style.cssText = 'font-size:0.8rem;color:#64748b;margin-bottom:0.25rem';
+            userLabel.textContent = 'Username';
+            var userValue = document.createElement('div');
+            userValue.style.fontSize = '0.9rem';
+            userValue.textContent = currentUser ? currentUser.username : '';
+            userSection.appendChild(userLabel);
+            userSection.appendChild(userValue);
+            body.appendChild(userSection);
+
+            // Daily email summary toggle row
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0;border-top:1px solid #334155';
+
+            var lbl = document.createElement('label');
+            lbl.htmlFor = 'digest-toggle';
+            lbl.style.cssText = 'font-size:0.85rem;cursor:' + (canUse ? 'pointer' : 'default');
+            lbl.textContent = 'Daily email summary';
+
+            var chk = document.createElement('input');
+            chk.type = 'checkbox';
+            chk.id = 'digest-toggle';
+            chk.checked = !!settings.email_digest;
+            chk.disabled = !canUse;
+            if (title) { chk.title = title; }
+            chk.onchange = function() { toggleEmailDigest(this); };
+
+            row.appendChild(lbl);
+            row.appendChild(chk);
+            body.appendChild(row);
+        })
+        .catch(function() {
+            body.textContent = '';
+            var err = document.createElement('div');
+            err.style.cssText = 'color:#f87171;font-size:0.85rem';
+            err.textContent = 'Failed to load settings.';
+            body.appendChild(err);
+        });
+}
+
+function toggleEmailDigest(checkbox) {
+    fetch('/api/account-settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email_digest: checkbox.checked})
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t || 'Failed to save'); });
+        toast('Settings saved', 'ok');
+    }).catch(function() {
+        checkbox.checked = !checkbox.checked;
+        toast('Failed to save settings', 'error');
+    });
+}
+
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { closeAddPanel(); closeSettingsPanel(); }
+    if (e.key === 'Escape') { closeAddPanel(); closeSettingsPanel(); closeAccountPanel(); }
 });
 
 // ---- Releases tab ----
@@ -806,6 +921,7 @@ function openSettingsPanel(btn) {
     _settingsRepoID = id;
     document.getElementById('settings-panel-title').textContent = name;
     closeAddPanel();
+    closeAccountPanel();
     document.getElementById('settings-panel').classList.add('open');
     loadSettingsPanel(id, pushEnabled);
 }
