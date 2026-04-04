@@ -88,6 +88,10 @@ func handleResendVerification(w http.ResponseWriter, r *http.Request, userID str
 		http.Error(w, "Email already verified", http.StatusBadRequest)
 		return
 	}
+	if user.Email == "" {
+		http.Error(w, "No email address on file", http.StatusBadRequest)
+		return
+	}
 	// Rate limit: max 3 resends per 10 minutes per user.
 	resendMu.Lock()
 	now := time.Now()
@@ -103,7 +107,11 @@ func handleResendVerification(w http.ResponseWriter, r *http.Request, userID str
 		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
-	resendAttempts[userID] = append(recent, now)
+	if len(recent) == 0 {
+		resendAttempts[userID] = []time.Time{now}
+	} else {
+		resendAttempts[userID] = append(recent, now)
+	}
 	resendMu.Unlock()
 
 	token, err := store.CreateVerificationToken(userID)
@@ -145,7 +153,8 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
 	}
-	if !strings.Contains(req.Email, "@") {
+	atIdx := strings.Index(req.Email, "@")
+	if atIdx < 1 || atIdx == len(req.Email)-1 || !strings.Contains(req.Email[atIdx+1:], ".") {
 		http.Error(w, "Invalid email address", http.StatusBadRequest)
 		return
 	}
