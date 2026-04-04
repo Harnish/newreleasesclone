@@ -3,7 +3,7 @@
 ## In Progress
 
 ## Planned
-- [ ] **Add Send Email Summary** - to send an email once a day of the previous day's updates (user Option)
+- [x] **Add Send Email Summary** - daily digest email at 7am UTC of previous day's releases; opt-in toggle in account settings panel (⚙ in header)
 - [ ] **Add immediate email** - to send an when a new release is detected. (user option per project)
 - [ ] **Pagenate releases and projects** - Allow the user to set the number of projects per page between 5,10 and 20.  Pagenate beyond that number.
 - [ ] **Main page sort options** - sort by date added, latest release, and alphabetically.
