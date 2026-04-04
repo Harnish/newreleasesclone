@@ -574,6 +574,7 @@ func (s *Store) GetDigestUsers() []User {
 		var u User
 		var emailVerified int
 		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &emailVerified); err != nil {
+			log.Printf("⚠ GetDigestUsers scan failed: %v", err)
 			continue
 		}
 		u.EmailVerified = emailVerified == 1
