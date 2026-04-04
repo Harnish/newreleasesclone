@@ -621,7 +621,7 @@ function showApp() {
 
 function updateVerifyBanner() {
     var banner = document.getElementById('verify-banner');
-    if (currentUser && !currentUser.email_verified && currentUser.email) {
+    if (currentUser && currentUser.smtp_enabled && !currentUser.email_verified && currentUser.email) {
         banner.style.display = '';
     } else {
         banner.style.display = 'none';

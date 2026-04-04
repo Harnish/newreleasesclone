@@ -56,7 +56,10 @@ func handleMe(w http.ResponseWriter, r *http.Request, userID string) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(struct {
+		*User
+		SMTPEnabled bool `json:"smtp_enabled"`
+	}{user, smtpEnabled})
 }
 
 // GET /verify-email?token=xxx — verifies email token, redirects with result query param.
@@ -144,7 +147,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Username = strings.TrimSpace(req.Username)
-	req.Email = strings.TrimSpace(req.Email)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if len(req.Username) < 3 {
 		http.Error(w, "Username must be at least 3 characters", http.StatusBadRequest)
 		return
