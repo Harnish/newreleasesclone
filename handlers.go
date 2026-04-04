@@ -2,10 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 )
+
+// smtpCfg and smtpEnabled are initialized in main() via SMTPConfigFromEnv.
+var smtpCfg SMTPConfig
+var smtpEnabled bool
 
 // getSessionUser extracts the authenticated user ID from the session cookie.
 func getSessionUser(r *http.Request) (string, bool) {
@@ -26,6 +31,15 @@ func requireAuth(h func(http.ResponseWriter, *http.Request, string)) http.Handle
 		}
 		h(w, r, userID)
 	}
+}
+
+// requestBaseURL returns "http(s)://host" from the incoming request.
+func requestBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {
@@ -52,18 +66,24 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.TrimSpace(req.Email)
 	if len(req.Username) < 3 {
 		http.Error(w, "Username must be at least 3 characters", http.StatusBadRequest)
 		return
 	}
 	if len(req.Password) < 8 {
 		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
+		return
+	}
+	if !strings.Contains(req.Email, "@") {
+		http.Error(w, "Invalid email address", http.StatusBadRequest)
 		return
 	}
 	user, err := store.CreateUser(req.Username, req.Password)
@@ -74,6 +94,19 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to create account", http.StatusInternalServerError)
 		}
 		return
+	}
+	if err := store.SetUserEmail(user.ID, req.Email); err != nil {
+		log.Printf("⚠ failed to set email for %s: %v", user.ID, err)
+	} else {
+		user.Email = req.Email
+	}
+	token, err := store.CreateVerificationToken(user.ID)
+	if err != nil {
+		log.Printf("⚠ failed to create verification token for %s: %v", user.ID, err)
+	} else if smtpEnabled {
+		if err := smtpCfg.SendVerificationEmail(req.Email, token, requestBaseURL(r)); err != nil {
+			log.Printf("⚠ failed to send verification email to %s: %v", req.Email, err)
+		}
 	}
 	sessionID := store.CreateSession(user.ID)
 	setSessionCookie(w, sessionID)

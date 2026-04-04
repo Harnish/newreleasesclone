@@ -923,3 +923,47 @@ func TestSMTPConfigFromEnv(t *testing.T) {
 		t.Errorf("expected Port 465, got %d", cfg.Port)
 	}
 }
+
+func TestHandleRegisterWithEmail(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	body := `{"username":"newuser","password":"password123","email":"new@example.com"}`
+	req, _ := http.NewRequest("POST", "/api/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Host", "localhost:8080")
+	w := httptest.NewRecorder()
+	handleRegister(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var user User
+	if err := json.NewDecoder(w.Body).Decode(&user); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if user.Email != "new@example.com" {
+		t.Errorf("expected email new@example.com in response, got %q", user.Email)
+	}
+	if user.EmailVerified {
+		t.Error("expected email_verified false on fresh registration")
+	}
+}
+
+func TestHandleRegisterMissingEmail(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	body := `{"username":"nomail","password":"password123"}`
+	req, _ := http.NewRequest("POST", "/api/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handleRegister(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
