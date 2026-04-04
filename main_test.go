@@ -1239,3 +1239,13 @@ func TestBuildDailySummaryBody(t *testing.T) {
 		t.Error("expected 'another v0.9.0' in body")
 	}
 }
+
+func TestNextSevenAMUTC(t *testing.T) {
+	d := nextSevenAMUTC()
+	if d <= 0 {
+		t.Errorf("expected positive duration, got %v", d)
+	}
+	if d > 24*time.Hour {
+		t.Errorf("expected at most 24h, got %v", d)
+	}
+}

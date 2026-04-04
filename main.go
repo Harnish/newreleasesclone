@@ -25,6 +25,10 @@ func main() {
 		log.Println("⚠ SMTP not configured — email features disabled")
 	}
 
+	if smtpEnabled {
+		go runDailyDigest()
+	}
+
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/sw.js", handleServiceWorker)
 	http.HandleFunc("/verify-email", handleVerifyEmail)
