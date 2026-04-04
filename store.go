@@ -570,10 +570,21 @@ func (s *Store) VerifyEmailToken(token string) (string, error) {
 		s.db.Exec("DELETE FROM email_verification_tokens WHERE token = ?", token)
 		return "", ErrTokenExpired
 	}
-	if _, err = s.db.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", userID); err != nil {
+	tx, err := s.db.Begin()
+	if err != nil {
 		return "", err
 	}
-	s.db.Exec("DELETE FROM email_verification_tokens WHERE token = ?", token)
+	if _, err = tx.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", userID); err != nil {
+		tx.Rollback()
+		return "", err
+	}
+	if _, err = tx.Exec("DELETE FROM email_verification_tokens WHERE token = ?", token); err != nil {
+		tx.Rollback()
+		return "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return "", err
+	}
 	return userID, nil
 }
 
