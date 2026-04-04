@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-// smtpCfg and smtpEnabled are initialized in main() via SMTPConfigFromEnv.
-var smtpCfg SMTPConfig
-var smtpEnabled bool
-
 var (
 	resendMu       sync.Mutex
 	resendAttempts = map[string][]time.Time{}
