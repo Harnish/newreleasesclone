@@ -1015,6 +1015,12 @@ func TestHandleResendVerification(t *testing.T) {
 	originalStore := store
 	defer func() { store = originalStore }()
 	store = newTestStore(t)
+
+	// Reset rate limiter state for test isolation.
+	resendMu.Lock()
+	resendAttempts = map[string][]time.Time{}
+	resendMu.Unlock()
+
 	userID, cookie := newTestAuth(t, store)
 	store.SetUserEmail(userID, "resend@example.com")
 
@@ -1032,6 +1038,12 @@ func TestHandleResendVerificationAlreadyVerified(t *testing.T) {
 	originalStore := store
 	defer func() { store = originalStore }()
 	store = newTestStore(t)
+
+	// Reset rate limiter state for test isolation.
+	resendMu.Lock()
+	resendAttempts = map[string][]time.Time{}
+	resendMu.Unlock()
+
 	userID, cookie := newTestAuth(t, store)
 	store.SetUserEmail(userID, "done@example.com")
 	// Mark verified directly
@@ -1085,6 +1097,12 @@ func TestHandleResendVerificationMethodNotAllowed(t *testing.T) {
 	originalStore := store
 	defer func() { store = originalStore }()
 	store = newTestStore(t)
+
+	// Reset rate limiter state for test isolation.
+	resendMu.Lock()
+	resendAttempts = map[string][]time.Time{}
+	resendMu.Unlock()
+
 	userID, cookie := newTestAuth(t, store)
 	store.SetUserEmail(userID, "method@example.com")
 
