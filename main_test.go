@@ -1046,3 +1046,54 @@ func TestHandleResendVerificationAlreadyVerified(t *testing.T) {
 		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
+
+func TestHandleResendVerificationRateLimit(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	// Reset rate limiter state for this test
+	resendMu.Lock()
+	resendAttempts = map[string][]time.Time{}
+	resendMu.Unlock()
+
+	userID, cookie := newTestAuth(t, store)
+	store.SetUserEmail(userID, "rate@example.com")
+
+	// Make 3 successful requests
+	for i := 0; i < 3; i++ {
+		req, _ := http.NewRequest("POST", "/api/resend-verification", nil)
+		req.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		requireAuth(handleResendVerification).ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("request %d: expected 200, got %d", i+1, w.Code)
+		}
+	}
+
+	// 4th request should be rate limited
+	req, _ := http.NewRequest("POST", "/api/resend-verification", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleResendVerification).ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected 429, got %d", w.Code)
+	}
+}
+
+func TestHandleResendVerificationMethodNotAllowed(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+	userID, cookie := newTestAuth(t, store)
+	store.SetUserEmail(userID, "method@example.com")
+
+	req, _ := http.NewRequest("GET", "/api/resend-verification", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleResendVerification).ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
