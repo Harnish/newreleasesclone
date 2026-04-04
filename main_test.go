@@ -1219,3 +1219,23 @@ func TestGetReleasesPublishedOn(t *testing.T) {
 		t.Errorf("expected 0 releases for other user, got %d", len(releases2))
 	}
 }
+
+func TestBuildDailySummaryBody(t *testing.T) {
+	releases := []Release{
+		{Name: "myproject", Version: "v1.2.3", URL: "https://github.com/my/project/releases/v1.2.3"},
+		{Name: "another", Version: "v0.9.0", URL: "https://pypi.org/project/another/0.9.0"},
+	}
+	body := buildDailySummaryBody(releases)
+	if !strings.Contains(body, "Here are the releases from yesterday:") {
+		t.Error("expected header line in body")
+	}
+	if !strings.Contains(body, "myproject v1.2.3") {
+		t.Error("expected 'myproject v1.2.3' in body")
+	}
+	if !strings.Contains(body, "https://github.com/my/project/releases/v1.2.3") {
+		t.Error("expected URL in body")
+	}
+	if !strings.Contains(body, "another v0.9.0") {
+		t.Error("expected 'another v0.9.0' in body")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"net/smtp"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // SMTPConfig holds SMTP connection settings read from environment variables.
@@ -55,4 +56,20 @@ func (c SMTPConfig) SendVerificationEmail(to, token, baseURL string) error {
 		link,
 	)
 	return c.SendMail(to, "Verify your Release Tracker email", body)
+}
+
+// buildDailySummaryBody formats the plain-text body for the daily digest email.
+// Each release is rendered as: "<Name> <Version> — <URL>"
+func buildDailySummaryBody(releases []Release) string {
+	var buf strings.Builder
+	buf.WriteString("Here are the releases from yesterday:\n\n")
+	for _, r := range releases {
+		fmt.Fprintf(&buf, "%s %s — %s\n", r.Name, r.Version, r.URL)
+	}
+	return buf.String()
+}
+
+// SendDailySummary sends the daily release digest to the given address.
+func (c SMTPConfig) SendDailySummary(to string, releases []Release) error {
+	return c.SendMail(to, "Your daily release summary", buildDailySummaryBody(releases))
 }
