@@ -437,3 +437,35 @@ func handleRefreshProject(w http.ResponseWriter, r *http.Request, userID string)
 	store.RefreshProject(repoID)
 	json.NewEncoder(w).Encode(map[string]string{"status": "refreshed", "project_id": repoID})
 }
+
+// GET /api/account-settings — returns account-level preferences for the current user.
+// POST /api/account-settings — updates account-level preferences.
+func handleAccountSettings(w http.ResponseWriter, r *http.Request, userID string) {
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case http.MethodGet:
+		enabled, err := store.GetUserDigestEnabled(userID)
+		if err != nil {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]bool{"email_digest": enabled})
+
+	case http.MethodPost:
+		var req struct {
+			EmailDigest bool `json:"email_digest"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := store.SetEmailDigest(userID, req.EmailDigest); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}

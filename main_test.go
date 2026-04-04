@@ -1249,3 +1249,72 @@ func TestNextSevenAMUTC(t *testing.T) {
 		t.Errorf("expected at most 24h, got %v", d)
 	}
 }
+
+func TestHandleAccountSettingsGET(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	userID, cookie := newTestAuth(t, store)
+	_ = userID
+
+	req, _ := http.NewRequest("GET", "/api/account-settings", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleAccountSettings).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]bool
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["email_digest"] {
+		t.Error("expected email_digest false by default")
+	}
+}
+
+func TestHandleAccountSettingsPOST(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	userID, cookie := newTestAuth(t, store)
+
+	body := `{"email_digest":true}`
+	req, _ := http.NewRequest("POST", "/api/account-settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleAccountSettings).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	enabled, err := store.GetUserDigestEnabled(userID)
+	if err != nil {
+		t.Fatalf("GetUserDigestEnabled: %v", err)
+	}
+	if !enabled {
+		t.Error("expected email_digest enabled after POST")
+	}
+}
+
+func TestHandleAccountSettingsMethodNotAllowed(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	_, cookie := newTestAuth(t, store)
+
+	req, _ := http.NewRequest("DELETE", "/api/account-settings", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleAccountSettings).ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
