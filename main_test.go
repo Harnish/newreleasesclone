@@ -888,3 +888,38 @@ func TestStoreCreateVerificationTokenDeletesOld(t *testing.T) {
 		t.Errorf("expected old token deleted, got %v", err)
 	}
 }
+
+func TestSMTPConfigFromEnv(t *testing.T) {
+	// No env vars set — should return disabled
+	cfg, ok := SMTPConfigFromEnv()
+	if ok {
+		t.Errorf("expected disabled with no env vars, got config: %+v", cfg)
+	}
+
+	// Set required vars
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_USER", "user@example.com")
+	t.Setenv("SMTP_PASS", "secret")
+	t.Setenv("SMTP_FROM", "noreply@example.com")
+
+	cfg, ok = SMTPConfigFromEnv()
+	if !ok {
+		t.Fatal("expected enabled with all required env vars")
+	}
+	if cfg.Host != "smtp.example.com" {
+		t.Errorf("expected Host smtp.example.com, got %q", cfg.Host)
+	}
+	if cfg.Port != 587 {
+		t.Errorf("expected default Port 587, got %d", cfg.Port)
+	}
+	if cfg.User != "user@example.com" {
+		t.Errorf("expected User user@example.com, got %q", cfg.User)
+	}
+
+	// Custom port
+	t.Setenv("SMTP_PORT", "465")
+	cfg, _ = SMTPConfigFromEnv()
+	if cfg.Port != 465 {
+		t.Errorf("expected Port 465, got %d", cfg.Port)
+	}
+}
