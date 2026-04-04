@@ -277,6 +277,8 @@ body {
     margin-left: 0.35rem;
 }
 .ver-chip-more:hover { text-decoration: underline; }
+.ver-chip-link { color: #60a5fa; text-decoration: none; }
+.ver-chip-link:hover { text-decoration: underline; }
 .ver-more-list { display: none; border-top: 1px solid #334155; }
 .ver-more-list.open { display: block; }
 
@@ -663,7 +665,10 @@ function buildReleasesHTML(releases, projects) {
         var hidden  = rels.slice(5);
 
         var chips = visible.map(function(r, i) {
-            return fmtAge(r.published_at) + ': ' + esc(r.version) +
+            var notes = r.release_notes || r.description || '';
+            var vlink = '<a class="ver-chip-link" href="' + esc(r.url) + '" target="_blank"' +
+                (notes ? ' title="' + esc(notes) + '"' : '') + '>' + esc(r.version) + '</a>';
+            return fmtAge(r.published_at) + ': ' + vlink +
                 (i < visible.length - 1 || hidden.length > 0 ? ',&nbsp; ' : '');
         }).join('');
 
