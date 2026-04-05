@@ -800,6 +800,8 @@ function loadAccountPanel() {
                     navigator.clipboard.writeText(feedURL).then(function() {
                         copyBtn.textContent = 'Copied!';
                         setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+                    }).catch(function() {
+                        toast('Failed to copy — please copy manually', 'err');
                     });
                 };
                 rssRow.appendChild(copyBtn);
