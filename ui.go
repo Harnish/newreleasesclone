@@ -774,6 +774,38 @@ function loadAccountPanel() {
             row.appendChild(lbl);
             row.appendChild(chk);
             body.appendChild(row);
+
+            var rssToken = currentUser && currentUser.rss_token;
+            if (rssToken) {
+                var rssSection = document.createElement('div');
+                rssSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
+                var rssLabel = document.createElement('div');
+                rssLabel.style.cssText = 'font-size:0.8rem;color:#64748b;margin-bottom:0.4rem';
+                rssLabel.textContent = 'RSS Feed';
+                rssSection.appendChild(rssLabel);
+                var rssRow = document.createElement('div');
+                rssRow.style.cssText = 'display:flex;gap:0.4rem;align-items:center';
+                var feedURL = window.location.origin + '/feed/' + rssToken;
+                var rssInput = document.createElement('input');
+                rssInput.type = 'text';
+                rssInput.readOnly = true;
+                rssInput.value = feedURL;
+                rssInput.style.cssText = 'flex:1;font-size:0.75rem;padding:0.3rem 0.4rem;background:#1e293b;border:1px solid #334155;color:#94a3b8;border-radius:4px;min-width:0';
+                rssRow.appendChild(rssInput);
+                var copyBtn = document.createElement('button');
+                copyBtn.className = 'btn btn-ghost';
+                copyBtn.style.cssText = 'font-size:0.75rem;padding:0.3rem 0.5rem;flex-shrink:0';
+                copyBtn.textContent = 'Copy';
+                copyBtn.onclick = function() {
+                    navigator.clipboard.writeText(feedURL).then(function() {
+                        copyBtn.textContent = 'Copied!';
+                        setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+                    });
+                };
+                rssRow.appendChild(copyBtn);
+                rssSection.appendChild(rssRow);
+                body.appendChild(rssSection);
+            }
         })
         .catch(function() {
             body.textContent = '';
