@@ -1379,3 +1379,119 @@ func TestGetUserByRSSToken(t *testing.T) {
 		t.Errorf("expected nil for unknown token, got %v", missing)
 	}
 }
+
+// TestHandleFeed tests GET /feed/<token> returns Atom XML for valid tokens.
+func TestHandleFeed(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	s := newTestStore(t)
+	store = s
+
+	// Create user and add a release
+	user, err := s.CreateUser("feeduser", "password")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	repoID, err := s.AddRepo(user.ID, Project{
+		Name:     "myproject",
+		Platform: "github",
+		RepoURL:  "https://github.com/x/myproject",
+	})
+	if err != nil {
+		t.Fatalf("AddRepo: %v", err)
+	}
+	s.AddRelease(repoID, Release{
+		ID:          "gh_1",
+		Name:        "myproject",
+		Version:     "v1.2.3",
+		Platform:    "github",
+		URL:         "https://github.com/x/myproject/releases/tag/v1.2.3",
+		PublishedAt: time.Now().Add(-time.Hour),
+	})
+
+	// Valid token — expect 200 with Atom content type and valid XML
+	req, _ := http.NewRequest("GET", "/feed/"+user.RSSToken, nil)
+	req.Host = "example.com"
+	w := httptest.NewRecorder()
+	http.HandlerFunc(handleFeed).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid token, got %d: %s", w.Code, w.Body.String())
+	}
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "application/atom+xml") {
+		t.Errorf("expected atom+xml content type, got %q", ct)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "myproject v1.2.3") {
+		t.Errorf("expected release title in feed, got:\n%s", body)
+	}
+	if !strings.Contains(body, "https://github.com/x/myproject/releases/tag/v1.2.3") {
+		t.Errorf("expected release URL in feed, got:\n%s", body)
+	}
+
+	// Unknown token — expect 404
+	req, _ = http.NewRequest("GET", "/feed/unknowntoken00000000000000000000000000000000000000000000000000", nil)
+	w = httptest.NewRecorder()
+	http.HandlerFunc(handleFeed).ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for unknown token, got %d", w.Code)
+	}
+
+	// Empty token path — expect 404
+	req, _ = http.NewRequest("GET", "/feed/", nil)
+	w = httptest.NewRecorder()
+	http.HandlerFunc(handleFeed).ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for empty token, got %d", w.Code)
+	}
+}
+
+// TestHandleFeedEmptyReleases tests that a valid token with no releases returns a valid empty Atom feed.
+func TestHandleFeedEmptyReleases(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	s := newTestStore(t)
+	store = s
+
+	user, err := s.CreateUser("emptyuser", "password")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	req, _ := http.NewRequest("GET", "/feed/"+user.RSSToken, nil)
+	req.Host = "example.com"
+	w := httptest.NewRecorder()
+	http.HandlerFunc(handleFeed).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for empty feed, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "<feed") {
+		t.Errorf("expected Atom feed element, got:\n%s", body)
+	}
+}
+
+// TestHandleMeIncludesRSSToken verifies /api/me response includes rss_token.
+func TestHandleMeIncludesRSSToken(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+	_, cookie := newTestAuth(t, store)
+
+	req, _ := http.NewRequest("GET", "/api/me", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleMe).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	token, ok := resp["rss_token"].(string)
+	if !ok || token == "" {
+		t.Errorf("expected non-empty rss_token in /api/me response, got %v", resp["rss_token"])
+	}
+}

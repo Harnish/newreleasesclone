@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"log"
 	"net/http"
 	"strings"
@@ -436,6 +437,90 @@ func handleRefreshProject(w http.ResponseWriter, r *http.Request, userID string)
 	}
 	store.RefreshProject(repoID)
 	json.NewEncoder(w).Encode(map[string]string{"status": "refreshed", "project_id": repoID})
+}
+
+// GET /api/account-settings — returns account-level preferences for the current user.
+// POST /api/account-settings — updates account-level preferences.
+// ---- Atom feed ----
+
+type atomFeed struct {
+	XMLName xml.Name    `xml:"feed"`
+	XMLNS   string      `xml:"xmlns,attr"`
+	Title   string      `xml:"title"`
+	Links   []atomLink  `xml:"link"`
+	Updated string      `xml:"updated"`
+	ID      string      `xml:"id"`
+	Entries []atomEntry `xml:"entry"`
+}
+
+type atomLink struct {
+	Href string `xml:"href,attr"`
+	Rel  string `xml:"rel,attr,omitempty"`
+}
+
+type atomEntry struct {
+	Title   string     `xml:"title"`
+	Links   []atomLink `xml:"link"`
+	ID      string     `xml:"id"`
+	Updated string     `xml:"updated"`
+	Summary string     `xml:"summary,omitempty"`
+}
+
+// GET /feed/<token> — unauthenticated Atom feed for a user.
+func handleFeed(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimPrefix(r.URL.Path, "/feed/")
+	if token == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	user, err := store.GetUserByRSSToken(token)
+	if err != nil {
+		log.Printf("⚠ handleFeed: token lookup failed: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if user == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	releases := store.GetUserReleasesForFeed(user.ID, 50)
+
+	baseURL := requestBaseURL(r)
+	feedURL := baseURL + "/feed/" + token
+
+	updated := time.Now().UTC()
+	if len(releases) > 0 {
+		updated = releases[0].PublishedAt.UTC()
+	}
+
+	feed := atomFeed{
+		XMLNS:   "http://www.w3.org/2005/Atom",
+		Title:   user.Username + "'s releases",
+		Links:   []atomLink{{Href: feedURL, Rel: "self"}},
+		Updated: updated.Format(time.RFC3339),
+		ID:      feedURL,
+	}
+	for _, rel := range releases {
+		entry := atomEntry{
+			Title:   rel.Name + " " + rel.Version,
+			Links:   []atomLink{{Href: rel.URL}},
+			ID:      rel.URL,
+			Updated: rel.PublishedAt.UTC().Format(time.RFC3339),
+			Summary: rel.ReleaseNotes,
+		}
+		feed.Entries = append(feed.Entries, entry)
+	}
+
+	out, err := xml.MarshalIndent(feed, "", "  ")
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/atom+xml; charset=utf-8")
+	w.Write([]byte(xml.Header))
+	w.Write(out)
 }
 
 // GET /api/account-settings — returns account-level preferences for the current user.

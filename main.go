@@ -32,6 +32,7 @@ func main() {
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/sw.js", handleServiceWorker)
 	http.HandleFunc("/verify-email", handleVerifyEmail)
+	http.HandleFunc("/feed/", handleFeed)
 	http.HandleFunc("/api/me", requireAuth(handleMe))
 	http.HandleFunc("/api/register", handleRegister)
 	http.HandleFunc("/api/login", handleLogin)
