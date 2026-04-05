@@ -1318,3 +1318,64 @@ func TestHandleAccountSettingsMethodNotAllowed(t *testing.T) {
 		t.Errorf("expected 405, got %d", w.Code)
 	}
 }
+
+// TestCreateUserGeneratesRSSToken verifies every new user gets a non-empty, unique rss_token.
+func TestCreateUserGeneratesRSSToken(t *testing.T) {
+	s := newTestStore(t)
+
+	u1, err := s.CreateUser("alice", "password1")
+	if err != nil {
+		t.Fatalf("CreateUser alice: %v", err)
+	}
+	if u1.RSSToken == "" {
+		t.Fatal("expected non-empty RSSToken for new user")
+	}
+
+	u2, err := s.CreateUser("bob", "password2")
+	if err != nil {
+		t.Fatalf("CreateUser bob: %v", err)
+	}
+	if u2.RSSToken == "" {
+		t.Fatal("expected non-empty RSSToken for new user")
+	}
+	if u1.RSSToken == u2.RSSToken {
+		t.Errorf("expected unique tokens; both got %q", u1.RSSToken)
+	}
+
+	// GetUserByID must also return the token
+	got, err := s.GetUserByID(u1.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if got.RSSToken != u1.RSSToken {
+		t.Errorf("GetUserByID returned token %q, want %q", got.RSSToken, u1.RSSToken)
+	}
+}
+
+// TestGetUserByRSSToken verifies lookup by token works and returns nil for unknown tokens.
+func TestGetUserByRSSToken(t *testing.T) {
+	s := newTestStore(t)
+
+	u, err := s.CreateUser("alice", "password1")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+
+	// Found
+	found, err := s.GetUserByRSSToken(u.RSSToken)
+	if err != nil {
+		t.Fatalf("GetUserByRSSToken: %v", err)
+	}
+	if found == nil || found.ID != u.ID {
+		t.Errorf("expected user %q, got %v", u.ID, found)
+	}
+
+	// Not found — nil, nil
+	missing, err := s.GetUserByRSSToken("doesnotexist00000000000000000000")
+	if err != nil {
+		t.Fatalf("unexpected error for unknown token: %v", err)
+	}
+	if missing != nil {
+		t.Errorf("expected nil for unknown token, got %v", missing)
+	}
+}

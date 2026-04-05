@@ -211,6 +211,18 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 8 {
+		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN rss_token TEXT`); err != nil {
+			return fmt.Errorf("failed to migrate to v8 (rss_token): %w", err)
+		}
+		if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_rss_token ON users(rss_token) WHERE rss_token IS NOT NULL`); err != nil {
+			return fmt.Errorf("failed to create rss_token index: %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 8"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -472,14 +484,15 @@ func (s *Store) CreateUser(username, password string) (*User, error) {
 		return nil, err
 	}
 	id := fmt.Sprintf("user_%s", generateToken()[:12])
+	token := generateToken()
 	_, err = s.db.Exec(
-		"INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)",
-		id, username, string(hash), time.Now().Format(time.RFC3339),
+		"INSERT INTO users (id, username, password_hash, created_at, rss_token) VALUES (?, ?, ?, ?, ?)",
+		id, username, string(hash), time.Now().Format(time.RFC3339), token,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return &User{ID: id, Username: username}, nil
+	return &User{ID: id, Username: username, RSSToken: token}, nil
 }
 
 func (s *Store) AuthenticateUser(username, password string) (*User, error) {
@@ -533,8 +546,24 @@ func (s *Store) GetUserByID(userID string) (*User, error) {
 	var u User
 	var emailVerified int
 	err := s.db.QueryRow(
-		"SELECT id, username, email, email_verified FROM users WHERE id = ?", userID,
-	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified)
+		"SELECT id, username, email, email_verified, COALESCE(rss_token,'') FROM users WHERE id = ?", userID,
+	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.RSSToken)
+	if err != nil {
+		return nil, err
+	}
+	u.EmailVerified = emailVerified == 1
+	return &u, nil
+}
+
+func (s *Store) GetUserByRSSToken(token string) (*User, error) {
+	var u User
+	var emailVerified int
+	err := s.db.QueryRow(
+		"SELECT id, username, email, email_verified, COALESCE(rss_token,'') FROM users WHERE rss_token = ?", token,
+	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.RSSToken)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -790,6 +819,22 @@ func (s *Store) GetUserReleases(userID string) []Release {
 		ORDER BY r.published_at DESC`, userID)
 	if err != nil {
 		log.Printf("⚠ Failed to query user releases: %v", err)
+		return []Release{}
+	}
+	defer rows.Close()
+	return scanReleases(rows)
+}
+
+func (s *Store) GetUserReleasesForFeed(userID string, limit int) []Release {
+	rows, err := s.db.Query(`
+		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes
+		FROM releases r
+		INNER JOIN user_repos ur ON ur.repo_id = r.repo_id
+		WHERE ur.user_id = ?
+		ORDER BY r.published_at DESC
+		LIMIT ?`, userID, limit)
+	if err != nil {
+		log.Printf("⚠ GetUserReleasesForFeed failed for user %s: %v", userID, err)
 		return []Release{}
 	}
 	defer rows.Close()
