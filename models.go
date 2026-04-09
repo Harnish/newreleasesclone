@@ -8,6 +8,7 @@ type User struct {
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
 	RSSToken      string `json:"rss_token"`
+	PageSize      int    `json:"page_size"`
 }
 
 type Release struct {

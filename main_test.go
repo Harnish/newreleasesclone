@@ -1495,3 +1495,17 @@ func TestHandleMeIncludesRSSToken(t *testing.T) {
 		t.Errorf("expected non-empty rss_token in /api/me response, got %v", resp["rss_token"])
 	}
 }
+
+// TestUserPageSizeDefault tests that new users get a default page_size of 10
+func TestUserPageSizeDefault(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+
+	user, err := s.GetUserByID(userID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if user.PageSize != 10 {
+		t.Errorf("expected default page_size 10, got %d", user.PageSize)
+	}
+}

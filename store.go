@@ -223,6 +223,15 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 9 {
+		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN page_size INTEGER NOT NULL DEFAULT 10`); err != nil {
+			return fmt.Errorf("failed to migrate to v9 (page_size): %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 9"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -546,8 +555,8 @@ func (s *Store) GetUserByID(userID string) (*User, error) {
 	var u User
 	var emailVerified int
 	err := s.db.QueryRow(
-		"SELECT id, username, email, email_verified, COALESCE(rss_token,'') FROM users WHERE id = ?", userID,
-	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.RSSToken)
+		"SELECT id, username, email, email_verified, COALESCE(rss_token,''), page_size FROM users WHERE id = ?", userID,
+	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.RSSToken, &u.PageSize)
 	if err != nil {
 		return nil, err
 	}
