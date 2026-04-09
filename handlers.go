@@ -194,6 +194,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	user, err := store.AuthenticateUser(req.Email, req.Password)
 	if err != nil {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
