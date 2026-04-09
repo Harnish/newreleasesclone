@@ -568,8 +568,8 @@ func (s *Store) GetUserByRSSToken(token string) (*User, error) {
 	var u User
 	var emailVerified int
 	err := s.db.QueryRow(
-		"SELECT id, username, email, email_verified, COALESCE(rss_token,'') FROM users WHERE rss_token = ?", token,
-	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.RSSToken)
+		"SELECT id, username, email, email_verified, COALESCE(rss_token,''), page_size FROM users WHERE rss_token = ?", token,
+	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.RSSToken, &u.PageSize)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
