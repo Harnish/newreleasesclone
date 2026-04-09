@@ -756,7 +756,7 @@ func BenchmarkStoreAddRepo(b *testing.B) {
 // BenchmarkStoreAddRelease benchmarks adding releases
 func BenchmarkStoreAddRelease(b *testing.B) {
 	s, _ := NewStore(":memory:")
-	user, _ := s.CreateUser("benchuser", "password123")
+	user, _ := s.CreateUser("benchuser@example.com", "password123")
 	repoID, _ := s.AddRepo(user.ID, Project{
 		Name:     "Bench Project",
 		Platform: "github",
@@ -837,7 +837,7 @@ func TestStoreVerificationToken(t *testing.T) {
 
 func TestStoreVerifyEmailTokenExpired(t *testing.T) {
 	s := newTestStore(t)
-	user, _ := s.CreateUser("expiretest", "password123")
+	user, _ := s.CreateUser("expiretest@example.com", "password123")
 
 	// Insert an already-expired token directly
 	expiredAt := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
@@ -862,7 +862,7 @@ func TestStoreVerifyEmailTokenNotFound(t *testing.T) {
 
 func TestStoreCreateVerificationTokenDeletesOld(t *testing.T) {
 	s := newTestStore(t)
-	user, _ := s.CreateUser("reusetest", "password123")
+	user, _ := s.CreateUser("reusetest@example.com", "password123")
 
 	token1, _ := s.CreateVerificationToken(user.ID)
 	token2, _ := s.CreateVerificationToken(user.ID)
@@ -917,7 +917,7 @@ func TestHandleRegisterWithEmail(t *testing.T) {
 	defer func() { store = originalStore }()
 	store = newTestStore(t)
 
-	body := `{"username":"newuser","password":"password123","email":"new@example.com"}`
+	body := `{"password":"password123","email":"new@example.com"}`
 	req, _ := http.NewRequest("POST", "/api/register", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Host", "localhost:8080")
@@ -945,7 +945,7 @@ func TestHandleRegisterMissingEmail(t *testing.T) {
 	defer func() { store = originalStore }()
 	store = newTestStore(t)
 
-	body := `{"username":"nomail","password":"password123"}`
+	body := `{"password":"password123"}`
 	req, _ := http.NewRequest("POST", "/api/register", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -1217,7 +1217,7 @@ func TestGetReleasesPublishedOn(t *testing.T) {
 	}
 
 	// Other user should see nothing (no user_repos entry)
-	u2, _ := s.CreateUser("other", "password123")
+	u2, _ := s.CreateUser("other@example.com", "password123")
 	releases2 := s.GetReleasesPublishedOn(u2.ID, yesterday)
 	if len(releases2) != 0 {
 		t.Errorf("expected 0 releases for other user, got %d", len(releases2))
@@ -1327,7 +1327,7 @@ func TestHandleAccountSettingsMethodNotAllowed(t *testing.T) {
 func TestCreateUserGeneratesRSSToken(t *testing.T) {
 	s := newTestStore(t)
 
-	u1, err := s.CreateUser("alice", "password1")
+	u1, err := s.CreateUser("alice@example.com", "password1")
 	if err != nil {
 		t.Fatalf("CreateUser alice: %v", err)
 	}
@@ -1335,7 +1335,7 @@ func TestCreateUserGeneratesRSSToken(t *testing.T) {
 		t.Fatal("expected non-empty RSSToken for new user")
 	}
 
-	u2, err := s.CreateUser("bob", "password2")
+	u2, err := s.CreateUser("bob@example.com", "password2")
 	if err != nil {
 		t.Fatalf("CreateUser bob: %v", err)
 	}
@@ -1360,7 +1360,7 @@ func TestCreateUserGeneratesRSSToken(t *testing.T) {
 func TestGetUserByRSSToken(t *testing.T) {
 	s := newTestStore(t)
 
-	u, err := s.CreateUser("alice", "password1")
+	u, err := s.CreateUser("alice@example.com", "password1")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -1392,7 +1392,7 @@ func TestHandleFeed(t *testing.T) {
 	store = s
 
 	// Create user and add a release
-	user, err := s.CreateUser("feeduser", "password")
+	user, err := s.CreateUser("feeduser@example.com", "password")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -1457,7 +1457,7 @@ func TestHandleFeedEmptyReleases(t *testing.T) {
 	s := newTestStore(t)
 	store = s
 
-	user, err := s.CreateUser("emptyuser", "password")
+	user, err := s.CreateUser("emptyuser@example.com", "password")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
