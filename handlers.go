@@ -139,7 +139,6 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Username string `json:"username"`
 		Password string `json:"password"`
 		Email    string `json:"email"`
 	}
@@ -147,12 +146,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	if len(req.Username) < 3 {
-		http.Error(w, "Username must be at least 3 characters", http.StatusBadRequest)
-		return
-	}
 	if len(req.Password) < 8 {
 		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
@@ -165,7 +159,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	user, err := store.CreateUser(req.Email, req.Password)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			http.Error(w, "Email already taken", http.StatusConflict)
+			http.Error(w, "Email already registered", http.StatusConflict)
 		} else {
 			http.Error(w, "Failed to create account", http.StatusInternalServerError)
 		}
@@ -193,16 +187,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Username string `json:"username"`
+		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	user, err := store.AuthenticateUser(req.Username, req.Password)
+	user, err := store.AuthenticateUser(req.Email, req.Password)
 	if err != nil {
-		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 	sessionID := store.CreateSession(user.ID)
