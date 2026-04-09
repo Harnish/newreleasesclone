@@ -504,7 +504,7 @@ body {
             <label style="font-size:0.8rem;color:#94a3b8" for="page-size-select">Per page:</label>
             <select id="page-size-select" class="page-size-select" onchange="onPageSizeChange(this.value)">
                 <option value="5">5</option>
-                <option value="10" selected>10</option>
+                <option value="10">10</option>
                 <option value="20">20</option>
             </select>
             <button class="btn btn-primary" onclick="toggleAddPanel()">+ Add Project</button>
@@ -664,6 +664,9 @@ function doRegister(e) {
 function doLogout() {
     fetch('/api/logout', { method: 'POST' }).finally(function() {
         currentUser = null;
+        allProjects = [];
+        allReleases = [];
+        currentPage = 1;
         document.getElementById('app-page').style.display = 'none';
         document.getElementById('auth-page').style.display = '';
         document.getElementById('auth-error').style.display = 'none';
