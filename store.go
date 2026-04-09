@@ -509,8 +509,8 @@ func (s *Store) AuthenticateUser(username, password string) (*User, error) {
 	var hash string
 	var emailVerified int
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, email, email_verified FROM users WHERE username = ?", username,
-	).Scan(&u.ID, &u.Username, &hash, &u.Email, &emailVerified)
+		"SELECT id, username, password_hash, email, email_verified, page_size FROM users WHERE username = ?", username,
+	).Scan(&u.ID, &u.Username, &hash, &u.Email, &emailVerified, &u.PageSize)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("invalid credentials")
 	}
@@ -597,7 +597,7 @@ func (s *Store) GetUserDigestEnabled(userID string) (bool, error) {
 
 func (s *Store) GetDigestUsers() []User {
 	rows, err := s.db.Query(`
-		SELECT id, username, email, email_verified
+		SELECT id, username, email, email_verified, page_size
 		FROM users
 		WHERE email_digest = 1
 		  AND email_verified = 1
@@ -611,7 +611,7 @@ func (s *Store) GetDigestUsers() []User {
 	for rows.Next() {
 		var u User
 		var emailVerified int
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &emailVerified); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.PageSize); err != nil {
 			log.Printf("⚠ GetDigestUsers scan failed: %v", err)
 			continue
 		}
