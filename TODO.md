@@ -10,7 +10,7 @@
 - [ ] **Use project icon** - Put the project icon to the left of the project name.  
 - [ ] **screen usage** - on the phone it looks great but on the computer there can be more usable space  if the width is computer wide put the add repo to the right of the releases without shrinking the repos space and alway have it open  
 - [ ] **add commit sha to build info** - need a way to determine which build is being run from the ui
-- [ ] **user email as username** - usernames can end up being duplicate.  But email addresses have to be unique. Usernames should probably just be removed completely and only use email addresses.
+- [x] **user email as username** - usernames can end up being duplicate.  But email addresses have to be unique. Usernames should probably just be removed completely and only use email addresses.
 
 ## Done
 
