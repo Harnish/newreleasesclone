@@ -1606,3 +1606,34 @@ func TestHandleAccountSettingsPageSizeInvalid(t *testing.T) {
 		t.Errorf("expected 400 for invalid page_size, got %d", w.Code)
 	}
 }
+
+func TestMigrationV10EmailUnique(t *testing.T) {
+	s := newTestStore(t)
+
+	// After migration, duplicate email must fail.
+	_, err := s.db.Exec(
+		`INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)`,
+		"user_aaa111aaa111", "dup@example.com", "hash", "2026-01-01T00:00:00Z",
+	)
+	if err != nil {
+		t.Fatalf("first insert failed: %v", err)
+	}
+	_, err = s.db.Exec(
+		`INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)`,
+		"user_bbb222bbb222", "dup@example.com", "hash", "2026-01-01T00:00:00Z",
+	)
+	if err == nil {
+		t.Error("expected UNIQUE constraint error for duplicate email, got nil")
+	}
+}
+
+func TestMigrationV10NoUsernameColumn(t *testing.T) {
+	s := newTestStore(t)
+
+	// The username column must not exist after v10 migration.
+	_, err := s.db.Exec(`INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`,
+		"user_test000", "shouldfail", "hash", "2026-01-01T00:00:00Z")
+	if err == nil {
+		t.Error("expected error inserting into username column (should not exist), got nil")
+	}
+}

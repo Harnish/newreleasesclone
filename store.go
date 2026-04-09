@@ -232,6 +232,42 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 10 {
+		if _, err := db.Exec(`
+			CREATE TABLE users_new (
+				id             TEXT PRIMARY KEY,
+				email          TEXT NOT NULL UNIQUE,
+				password_hash  TEXT NOT NULL,
+				created_at     TEXT NOT NULL DEFAULT '',
+				email_verified INTEGER NOT NULL DEFAULT 0,
+				email_digest   INTEGER NOT NULL DEFAULT 0,
+				rss_token      TEXT,
+				page_size      INTEGER NOT NULL DEFAULT 10
+			)
+		`); err != nil {
+			return fmt.Errorf("failed to migrate to v10 (create users_new): %w", err)
+		}
+		if _, err := db.Exec(`
+			INSERT INTO users_new (id, email, password_hash, created_at, email_verified, email_digest, rss_token, page_size)
+			SELECT id, email, password_hash, created_at, email_verified, email_digest, rss_token, page_size
+			FROM users
+		`); err != nil {
+			return fmt.Errorf("failed to migrate to v10 (copy users): %w", err)
+		}
+		if _, err := db.Exec(`DROP TABLE users`); err != nil {
+			return fmt.Errorf("failed to migrate to v10 (drop users): %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE users_new RENAME TO users`); err != nil {
+			return fmt.Errorf("failed to migrate to v10 (rename users_new): %w", err)
+		}
+		if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_rss_token ON users(rss_token) WHERE rss_token IS NOT NULL`); err != nil {
+			return fmt.Errorf("failed to migrate to v10 (rss_token index): %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 10"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
