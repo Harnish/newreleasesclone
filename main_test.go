@@ -1151,6 +1151,30 @@ func TestSetGetEmailDigest(t *testing.T) {
 	}
 }
 
+func TestSetPageSize(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+
+	// valid sizes
+	for _, size := range []int{5, 10, 20} {
+		if err := s.SetPageSize(userID, size); err != nil {
+			t.Fatalf("SetPageSize(%d): %v", size, err)
+		}
+		user, err := s.GetUserByID(userID)
+		if err != nil {
+			t.Fatalf("GetUserByID: %v", err)
+		}
+		if user.PageSize != size {
+			t.Errorf("expected page_size %d, got %d", size, user.PageSize)
+		}
+	}
+
+	// invalid size rejected
+	if err := s.SetPageSize(userID, 7); err == nil {
+		t.Error("expected error for invalid page_size 7, got nil")
+	}
+}
+
 func TestGetDigestUsers(t *testing.T) {
 	s := newTestStore(t)
 
