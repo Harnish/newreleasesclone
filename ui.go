@@ -447,8 +447,8 @@ body {
 
     <form id="login-form" class="auth-form active" onsubmit="doLogin(event)">
         <div class="form-group">
-            <label>Username</label>
-            <input type="text" name="username" required autocomplete="username">
+            <label>Email</label>
+            <input type="email" name="email" required autocomplete="email">
         </div>
         <div class="form-group">
             <label>Password</label>
@@ -459,16 +459,12 @@ body {
 
     <form id="register-form" class="auth-form" onsubmit="doRegister(event)">
         <div class="form-group">
-            <label>Username <span style="color:#475569">(min 3 chars)</span></label>
-            <input type="text" name="username" required minlength="3" autocomplete="username">
+            <label>Email</label>
+            <input type="email" name="email" required autocomplete="email">
         </div>
         <div class="form-group">
             <label>Password <span style="color:#475569">(min 8 chars)</span></label>
             <input type="password" name="password" required minlength="8" autocomplete="new-password">
-        </div>
-        <div class="form-group">
-            <label>Email</label>
-            <input type="email" name="email" required autocomplete="email">
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%" id="register-btn">Create Account</button>
     </form>
@@ -683,7 +679,7 @@ var pageSize = parseInt(localStorage.getItem('page_size'), 10) || 10;
 function showApp() {
     document.getElementById('auth-page').style.display = 'none';
     document.getElementById('app-page').style.display = '';
-    document.getElementById('username-display').textContent = currentUser.username;
+    document.getElementById('username-display').textContent = currentUser.email;
     updateVerifyBanner();
     fetch('/api/refresh-check').catch(function() {});
     initNotifications();
@@ -796,10 +792,10 @@ function loadAccountPanel() {
             userSection.style.marginBottom = '1rem';
             var userLabel = document.createElement('div');
             userLabel.style.cssText = 'font-size:0.8rem;color:#64748b;margin-bottom:0.25rem';
-            userLabel.textContent = 'Username';
+            userLabel.textContent = 'Email';
             var userValue = document.createElement('div');
             userValue.style.fontSize = '0.9rem';
-            userValue.textContent = currentUser ? currentUser.username : '';
+            userValue.textContent = currentUser ? currentUser.email : '';
             userSection.appendChild(userLabel);
             userSection.appendChild(userValue);
             body.appendChild(userSection);
