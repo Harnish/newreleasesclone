@@ -5,16 +5,16 @@
 ## Planned
 - [x] **Add Send Email Summary** - daily digest email at 7am UTC of previous day's releases; opt-in toggle in account settings panel (⚙ in header)
 - [ ] **Add immediate email** - to send an when a new release is detected. (user option per project)
-- [ ] **Pagenate releases and projects** - Allow the user to set the number of projects per page between 5,10 and 20.  Pagenate beyond that number.
 - [ ] **Main page sort options** - sort by date added, latest release, and alphabetically.
 - [ ] **Determine if a release is a prerelease or not** - allow the user per project to be notified about prereleases.
 - [ ] **Use project icon** - Put the project icon to the left of the project name.  
 - [ ] **screen usage** - on the phone it looks great but on the computer there can be more usable space  if the width is computer wide put the add repo to the right of the releases without shrinking the repos space and alway have it open  
-
-
+- [ ] **add commit sha to build info** - need a way to determine which build is being run from the ui
+- [ ] **user email as username** - usernames can end up being duplicate.  But email addresses have to be unique. Usernames should probably just be removed completely and only use email addresses.
 
 ## Done
 
+- [x] **Pagenate releases and projects** - Allow the user to set the number of projects per page between 5,10 and 20.  Pagenate beyond that number.
 - [x] **User accounts with auth** — register/login/logout, session cookies, per-user project tracking
 - [x] **Shared release data** — deduplicated repos table; two users adding the same project share one release record
 - [x] **Smart URL autofill** — platform-aware input: `owner/repo` for GitHub/GitLab, package name for npm/PyPI, image name for Docker; auto-fills display name
