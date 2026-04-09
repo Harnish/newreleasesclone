@@ -529,7 +529,7 @@ func normalizeURL(u string) string {
 
 // ---- Auth ----
 
-func (s *Store) CreateUser(username, password string) (*User, error) {
+func (s *Store) CreateUser(email, password string) (*User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
@@ -537,22 +537,22 @@ func (s *Store) CreateUser(username, password string) (*User, error) {
 	id := fmt.Sprintf("user_%s", generateToken()[:12])
 	token := generateToken()
 	_, err = s.db.Exec(
-		"INSERT INTO users (id, username, password_hash, created_at, rss_token) VALUES (?, ?, ?, ?, ?)",
-		id, username, string(hash), time.Now().Format(time.RFC3339), token,
+		"INSERT INTO users (id, email, password_hash, created_at, rss_token) VALUES (?, ?, ?, ?, ?)",
+		id, email, string(hash), time.Now().Format(time.RFC3339), token,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return &User{ID: id, Username: username, RSSToken: token}, nil
+	return &User{ID: id, Email: email, RSSToken: token}, nil
 }
 
-func (s *Store) AuthenticateUser(username, password string) (*User, error) {
+func (s *Store) AuthenticateUser(email, password string) (*User, error) {
 	var u User
 	var hash string
 	var emailVerified int
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, email, email_verified, page_size FROM users WHERE username = ?", username,
-	).Scan(&u.ID, &u.Username, &hash, &u.Email, &emailVerified, &u.PageSize)
+		"SELECT id, email, password_hash, email_verified, page_size FROM users WHERE email = ?", email,
+	).Scan(&u.ID, &u.Email, &hash, &emailVerified, &u.PageSize)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("invalid credentials")
 	}
@@ -597,8 +597,8 @@ func (s *Store) GetUserByID(userID string) (*User, error) {
 	var u User
 	var emailVerified int
 	err := s.db.QueryRow(
-		"SELECT id, username, email, email_verified, COALESCE(rss_token,''), page_size FROM users WHERE id = ?", userID,
-	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.RSSToken, &u.PageSize)
+		"SELECT id, email, email_verified, COALESCE(rss_token,''), page_size FROM users WHERE id = ?", userID,
+	).Scan(&u.ID, &u.Email, &emailVerified, &u.RSSToken, &u.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -610,8 +610,8 @@ func (s *Store) GetUserByRSSToken(token string) (*User, error) {
 	var u User
 	var emailVerified int
 	err := s.db.QueryRow(
-		"SELECT id, username, email, email_verified, COALESCE(rss_token,''), page_size FROM users WHERE rss_token = ?", token,
-	).Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.RSSToken, &u.PageSize)
+		"SELECT id, email, email_verified, COALESCE(rss_token,''), page_size FROM users WHERE rss_token = ?", token,
+	).Scan(&u.ID, &u.Email, &emailVerified, &u.RSSToken, &u.PageSize)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -647,7 +647,7 @@ func (s *Store) GetUserDigestEnabled(userID string) (bool, error) {
 
 func (s *Store) GetDigestUsers() []User {
 	rows, err := s.db.Query(`
-		SELECT id, username, email, email_verified, page_size
+		SELECT id, email, email_verified, page_size
 		FROM users
 		WHERE email_digest = 1
 		  AND email_verified = 1
@@ -661,7 +661,7 @@ func (s *Store) GetDigestUsers() []User {
 	for rows.Next() {
 		var u User
 		var emailVerified int
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &emailVerified, &u.PageSize); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &emailVerified, &u.PageSize); err != nil {
 			log.Printf("⚠ GetDigestUsers scan failed: %v", err)
 			continue
 		}
@@ -695,11 +695,6 @@ var (
 	ErrTokenNotFound = fmt.Errorf("token not found")
 	ErrTokenExpired  = fmt.Errorf("token expired")
 )
-
-func (s *Store) SetUserEmail(userID, email string) error {
-	_, err := s.db.Exec("UPDATE users SET email = ? WHERE id = ?", email, userID)
-	return err
-}
 
 func (s *Store) CreateVerificationToken(userID string) (string, error) {
 	s.db.Exec("DELETE FROM email_verification_tokens WHERE user_id = ?", userID)

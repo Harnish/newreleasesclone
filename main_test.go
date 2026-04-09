@@ -25,7 +25,7 @@ func newTestStore(t *testing.T) *Store {
 // newTestAuth creates a user + session in s and returns the userID and session cookie.
 func newTestAuth(t *testing.T, s *Store) (string, *http.Cookie) {
 	t.Helper()
-	user, err := s.CreateUser("testuser", "password123")
+	user, err := s.CreateUser("testuser@example.com", "password123")
 	if err != nil {
 		t.Fatalf("failed to create test user: %v", err)
 	}
@@ -64,8 +64,8 @@ func TestStoreAddRepo(t *testing.T) {
 func TestStoreAddRepoDedupe(t *testing.T) {
 	s := newTestStore(t)
 
-	user1, _ := s.CreateUser("user1", "password123")
-	user2, _ := s.CreateUser("user2", "password123")
+	user1, _ := s.CreateUser("user1@example.com", "password123")
+	user2, _ := s.CreateUser("user2@example.com", "password123")
 
 	id1, err := s.AddRepo(user1.ID, Project{Name: "React", Platform: "npm", RepoURL: "react"})
 	if err != nil {
@@ -240,7 +240,7 @@ func TestStorePersistence(t *testing.T) {
 		t.Fatalf("failed to create store: %v", err)
 	}
 
-	user, err := s1.CreateUser("persist_user", "password123")
+	user, err := s1.CreateUser("persist_user@example.com", "password123")
 	if err != nil {
 		t.Fatalf("failed to create user: %v", err)
 	}
@@ -742,7 +742,7 @@ func TestHandleProjectSettings(t *testing.T) {
 // BenchmarkStoreAddRepo benchmarks adding repos
 func BenchmarkStoreAddRepo(b *testing.B) {
 	s, _ := NewStore(":memory:")
-	user, _ := s.CreateUser("benchuser", "password123")
+	user, _ := s.CreateUser("benchuser@example.com", "password123")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		s.AddRepo(user.ID, Project{
@@ -784,7 +784,7 @@ func BenchmarkTruncate(b *testing.B) {
 
 func TestStoreEmailFields(t *testing.T) {
 	s := newTestStore(t)
-	user, err := s.CreateUser("emailuser", "password123")
+	user, err := s.CreateUser("emailuser@example.com", "password123")
 	if err != nil {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
@@ -793,31 +793,17 @@ func TestStoreEmailFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUserByID failed: %v", err)
 	}
-	if got.Email != "" {
-		t.Errorf("expected empty email, got %q", got.Email)
+	if got.Email != "emailuser@example.com" {
+		t.Errorf("expected email emailuser@example.com, got %q", got.Email)
 	}
 	if got.EmailVerified {
 		t.Error("expected email_verified false for new user")
 	}
 }
 
-func TestStoreSetUserEmail(t *testing.T) {
-	s := newTestStore(t)
-	user, _ := s.CreateUser("emailtest", "password123")
-
-	if err := s.SetUserEmail(user.ID, "test@example.com"); err != nil {
-		t.Fatalf("SetUserEmail failed: %v", err)
-	}
-	got, _ := s.GetUserByID(user.ID)
-	if got.Email != "test@example.com" {
-		t.Errorf("expected email test@example.com, got %q", got.Email)
-	}
-}
-
 func TestStoreVerificationToken(t *testing.T) {
 	s := newTestStore(t)
-	user, _ := s.CreateUser("tokentest", "password123")
-	s.SetUserEmail(user.ID, "token@example.com")
+	user, _ := s.CreateUser("token@example.com", "password123")
 
 	token, err := s.CreateVerificationToken(user.ID)
 	if err != nil {
@@ -975,8 +961,7 @@ func TestHandleVerifyEmail(t *testing.T) {
 	defer func() { store = originalStore }()
 	store = newTestStore(t)
 
-	user, _ := store.CreateUser("verifyuser", "password123")
-	store.SetUserEmail(user.ID, "verify@example.com")
+	user, _ := store.CreateUser("verify@example.com", "password123")
 	token, _ := store.CreateVerificationToken(user.ID)
 
 	req, _ := http.NewRequest("GET", "/verify-email?token="+token, nil)
@@ -1023,8 +1008,7 @@ func TestHandleResendVerification(t *testing.T) {
 	resendAttempts = map[string][]time.Time{}
 	resendMu.Unlock()
 
-	userID, cookie := newTestAuth(t, store)
-	store.SetUserEmail(userID, "resend@example.com")
+	_, cookie := newTestAuth(t, store)
 
 	req, _ := http.NewRequest("POST", "/api/resend-verification", nil)
 	req.AddCookie(cookie)
@@ -1047,7 +1031,6 @@ func TestHandleResendVerificationAlreadyVerified(t *testing.T) {
 	resendMu.Unlock()
 
 	userID, cookie := newTestAuth(t, store)
-	store.SetUserEmail(userID, "done@example.com")
 	// Mark verified directly
 	store.db.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", userID)
 
@@ -1071,8 +1054,7 @@ func TestHandleResendVerificationRateLimit(t *testing.T) {
 	resendAttempts = map[string][]time.Time{}
 	resendMu.Unlock()
 
-	userID, cookie := newTestAuth(t, store)
-	store.SetUserEmail(userID, "rate@example.com")
+	_, cookie := newTestAuth(t, store)
 
 	// Make 3 successful requests
 	for i := 0; i < 3; i++ {
@@ -1105,8 +1087,7 @@ func TestHandleResendVerificationMethodNotAllowed(t *testing.T) {
 	resendAttempts = map[string][]time.Time{}
 	resendMu.Unlock()
 
-	userID, cookie := newTestAuth(t, store)
-	store.SetUserEmail(userID, "method@example.com")
+	_, cookie := newTestAuth(t, store)
 
 	req, _ := http.NewRequest("GET", "/api/resend-verification", nil)
 	req.AddCookie(cookie)
@@ -1181,19 +1162,16 @@ func TestGetDigestUsers(t *testing.T) {
 	s := newTestStore(t)
 
 	// u1: digest + verified + email => should appear
-	u1, _ := s.CreateUser("digest1", "password123")
-	s.SetUserEmail(u1.ID, "digest1@example.com")
+	u1, _ := s.CreateUser("digest1@example.com", "password123")
 	s.db.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", u1.ID)
 	s.SetEmailDigest(u1.ID, true)
 
 	// u2: digest enabled but not verified => should NOT appear
-	u2, _ := s.CreateUser("digest2", "password123")
-	s.SetUserEmail(u2.ID, "digest2@example.com")
+	u2, _ := s.CreateUser("digest2@example.com", "password123")
 	s.SetEmailDigest(u2.ID, true)
 
 	// u3: verified but digest off => should NOT appear
-	u3, _ := s.CreateUser("digest3", "password123")
-	s.SetUserEmail(u3.ID, "digest3@example.com")
+	u3, _ := s.CreateUser("digest3@example.com", "password123")
 	s.db.Exec("UPDATE users SET email_verified = 1 WHERE id = ?", u3.ID)
 
 	users := s.GetDigestUsers()
@@ -1637,6 +1615,56 @@ func TestMigrationV10NoUsernameColumn(t *testing.T) {
 		"user_test000", "shouldfail", "hash", "2026-01-01T00:00:00Z")
 	if err == nil {
 		t.Error("expected error inserting into username column (should not exist), got nil")
+	}
+}
+
+func TestCreateUserByEmail(t *testing.T) {
+	s := newTestStore(t)
+	user, err := s.CreateUser("alice@example.com", "password123")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if user.Email != "alice@example.com" {
+		t.Errorf("expected email alice@example.com, got %q", user.Email)
+	}
+	if user.ID == "" {
+		t.Error("expected non-empty ID")
+	}
+}
+
+func TestCreateUserDuplicateEmail(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.CreateUser("dup@example.com", "password123"); err != nil {
+		t.Fatalf("first CreateUser: %v", err)
+	}
+	_, err := s.CreateUser("dup@example.com", "password123")
+	if err == nil {
+		t.Error("expected error for duplicate email, got nil")
+	}
+}
+
+func TestAuthenticateUserByEmail(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.CreateUser("bob@example.com", "secret123"); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	user, err := s.AuthenticateUser("bob@example.com", "secret123")
+	if err != nil {
+		t.Fatalf("AuthenticateUser: %v", err)
+	}
+	if user.Email != "bob@example.com" {
+		t.Errorf("expected email bob@example.com, got %q", user.Email)
+	}
+}
+
+func TestAuthenticateUserWrongPassword(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.CreateUser("carol@example.com", "rightpass"); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	_, err := s.AuthenticateUser("carol@example.com", "wrongpass")
+	if err == nil {
+		t.Error("expected error for wrong password, got nil")
 	}
 }
 

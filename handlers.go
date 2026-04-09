@@ -162,19 +162,14 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid email address", http.StatusBadRequest)
 		return
 	}
-	user, err := store.CreateUser(req.Username, req.Password)
+	user, err := store.CreateUser(req.Email, req.Password)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			http.Error(w, "Username already taken", http.StatusConflict)
+			http.Error(w, "Email already taken", http.StatusConflict)
 		} else {
 			http.Error(w, "Failed to create account", http.StatusInternalServerError)
 		}
 		return
-	}
-	if err := store.SetUserEmail(user.ID, req.Email); err != nil {
-		log.Printf("⚠ failed to set email for %s: %v", user.ID, err)
-	} else {
-		user.Email = req.Email
 	}
 	token, err := store.CreateVerificationToken(user.ID)
 	if err != nil {
@@ -497,7 +492,7 @@ func handleFeed(w http.ResponseWriter, r *http.Request) {
 
 	feed := atomFeed{
 		XMLNS:   "http://www.w3.org/2005/Atom",
-		Title:   user.Username + "'s releases",
+		Title:   user.Email + "'s releases",
 		Links:   []atomLink{{Href: feedURL, Rel: "self"}},
 		Updated: updated.Format(time.RFC3339),
 		ID:      feedURL,
