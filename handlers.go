@@ -534,19 +534,36 @@ func handleAccountSettings(w http.ResponseWriter, r *http.Request, userID string
 			http.Error(w, "user not found", http.StatusNotFound)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]bool{"email_digest": enabled})
+		user, err := store.GetUserByID(userID)
+		if err != nil {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email_digest": enabled,
+			"page_size":    user.PageSize,
+		})
 
 	case http.MethodPost:
 		var req struct {
-			EmailDigest bool `json:"email_digest"`
+			EmailDigest *bool `json:"email_digest"`
+			PageSize    *int  `json:"page_size"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := store.SetEmailDigest(userID, req.EmailDigest); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+		if req.EmailDigest != nil {
+			if err := store.SetEmailDigest(userID, *req.EmailDigest); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		if req.PageSize != nil {
+			if err := store.SetPageSize(userID, *req.PageSize); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 		}
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 

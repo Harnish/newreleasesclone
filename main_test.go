@@ -1290,11 +1290,11 @@ func TestHandleAccountSettingsGET(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var resp map[string]bool
+	var resp map[string]interface{}
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp["email_digest"] {
+	if resp["email_digest"].(bool) {
 		t.Error("expected email_digest false by default")
 	}
 }
@@ -1531,5 +1531,78 @@ func TestUserPageSizeDefault(t *testing.T) {
 	}
 	if user.PageSize != 10 {
 		t.Errorf("expected default page_size 10, got %d", user.PageSize)
+	}
+}
+
+func TestHandleAccountSettingsPageSizeGET(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	_, cookie := newTestAuth(t, store)
+
+	req, _ := http.NewRequest("GET", "/api/account-settings", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleAccountSettings).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	ps, ok := resp["page_size"]
+	if !ok {
+		t.Fatal("expected page_size in response")
+	}
+	if int(ps.(float64)) != 10 {
+		t.Errorf("expected default page_size 10, got %v", ps)
+	}
+}
+
+func TestHandleAccountSettingsPageSizePOST(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	userID, cookie := newTestAuth(t, store)
+
+	body := `{"page_size":5}`
+	req, _ := http.NewRequest("POST", "/api/account-settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleAccountSettings).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	user, err := store.GetUserByID(userID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if user.PageSize != 5 {
+		t.Errorf("expected page_size 5, got %d", user.PageSize)
+	}
+}
+
+func TestHandleAccountSettingsPageSizeInvalid(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+	store = newTestStore(t)
+
+	_, cookie := newTestAuth(t, store)
+
+	body := `{"page_size":7}`
+	req, _ := http.NewRequest("POST", "/api/account-settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleAccountSettings).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid page_size, got %d", w.Code)
 	}
 }
