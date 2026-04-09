@@ -119,6 +119,37 @@ body {
     margin-bottom: 1rem;
 }
 .releases-title { font-size: 0.9rem; font-weight: 600; color: #94a3b8; }
+.page-size-select {
+    background: #1a2840;
+    color: #e2e8f0;
+    border: 1px solid #2d4a6e;
+    border-radius: 4px;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.2rem;
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+.pagination button {
+    background: #1a2840;
+    color: #e2e8f0;
+    border: 1px solid #2d4a6e;
+    border-radius: 4px;
+    padding: 0.25rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+}
+.pagination button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
 
 /* ---- Releases area (list + slide panel) ---- */
 .releases-area {
@@ -469,7 +500,15 @@ body {
 <div class="content">
     <div class="releases-header">
         <span class="releases-title">Projects</span>
-        <button class="btn btn-primary" onclick="toggleAddPanel()">+ Add Project</button>
+        <div style="display:flex;align-items:center;gap:0.6rem">
+            <label style="font-size:0.8rem;color:#94a3b8" for="page-size-select">Per page:</label>
+            <select id="page-size-select" class="page-size-select" onchange="onPageSizeChange(this.value)">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+            </select>
+            <button class="btn btn-primary" onclick="toggleAddPanel()">+ Add Project</button>
+        </div>
     </div>
     <div class="releases-area">
         <div id="releases-root"><div class="loading">Loading...</div></div>
@@ -633,6 +672,10 @@ function doLogout() {
 
 // ---- App init ----
 var currentUser = null;
+var allProjects = [];
+var allReleases = [];
+var currentPage = 1;
+var pageSize = parseInt(localStorage.getItem('page_size'), 10) || 10;
 
 function showApp() {
     document.getElementById('auth-page').style.display = 'none';
@@ -641,6 +684,10 @@ function showApp() {
     updateVerifyBanner();
     fetch('/api/refresh-check').catch(function() {});
     initNotifications();
+    if (currentUser.page_size && [5, 10, 20].indexOf(currentUser.page_size) !== -1) {
+        pageSize = currentUser.page_size;
+        localStorage.setItem('page_size', String(pageSize));
+    }
     loadReleases();
 }
 
@@ -913,6 +960,55 @@ function buildReleasesHTML(releases, projects) {
     }).join('');
 }
 
+function buildPaginationHTML() {
+    var total = allProjects.length;
+    var totalPages = Math.ceil(total / pageSize);
+    if (totalPages <= 1) return '';
+    return '<div class="pagination">' +
+        '<button onclick="goToPage(' + (currentPage - 1) + ')"' +
+            (currentPage <= 1 ? ' disabled' : '') + '>\u2190 Prev</button>' +
+        '<span>Page ' + currentPage + ' of ' + totalPages + '</span>' +
+        '<button onclick="goToPage(' + (currentPage + 1) + ')"' +
+            (currentPage >= totalPages ? ' disabled' : '') + '>Next \u2192</button>' +
+    '</div>';
+}
+
+function renderPage() {
+    var start = (currentPage - 1) * pageSize;
+    var pageProjects = allProjects.slice(start, start + pageSize);
+    var pageIDs = {};
+    pageProjects.forEach(function(p) { pageIDs[p.id] = true; });
+    var pageReleases = allReleases.filter(function(r) { return pageIDs[r.project_id]; });
+    // All content is passed through esc() inside buildReleasesHTML and buildPaginationHTML.
+    document.getElementById('releases-root').innerHTML =
+        buildReleasesHTML(pageReleases, pageProjects) + buildPaginationHTML();
+    var sel = document.getElementById('page-size-select');
+    if (sel) sel.value = String(pageSize);
+}
+
+function goToPage(n) {
+    var totalPages = Math.ceil(allProjects.length / pageSize) || 1;
+    if (n < 1 || n > totalPages) return;
+    currentPage = n;
+    renderPage();
+}
+
+function onPageSizeChange(val) {
+    var n = parseInt(val, 10);
+    if (n !== 5 && n !== 10 && n !== 20) return;
+    pageSize = n;
+    currentPage = 1;
+    localStorage.setItem('page_size', String(n));
+    fetch('/api/account-settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({page_size: n})
+    }).catch(function() {
+        toast('Failed to save page size preference', 'err');
+    });
+    renderPage();
+}
+
 function toggleMore(btn) {
     var list = btn.closest('.ver-chips').nextElementSibling;
     var open = list.classList.toggle('open');
@@ -930,13 +1026,17 @@ function loadReleases() {
         fetch('/api/releases').then(function(r) { return r.json(); }),
         fetch('/api/projects').then(function(r) { return r.json(); })
     ]).then(function(res) {
-        document.getElementById('releases-root').innerHTML = buildReleasesHTML(res[0], res[1]);
+        allReleases = res[0] || [];
+        allProjects = res[1] || [];
+        currentPage = 1;
+        renderPage();
         if (_settingsRepoID) {
-            var fresh = (res[1] || []).filter(function(p) { return p.id === _settingsRepoID; })[0];
+            var fresh = allProjects.filter(function(p) { return p.id === _settingsRepoID; })[0];
             if (fresh) {
                 loadSettingsPanel(_settingsRepoID, fresh.push_enabled);
             } else {
                 closeSettingsPanel();
+                _settingsRepoID = null;
             }
         }
     }).catch(function(err) {
@@ -1086,15 +1186,21 @@ function doDelete(btn) {
         .then(function(r) {
             if (r.ok) {
                 toast('Project deleted.');
-                loadReleases();
+                allProjects = allProjects.filter(function(p) { return p.id !== id; });
+                allReleases = allReleases.filter(function(rel) { return rel.project_id !== id; });
+                var totalPages = Math.ceil(allProjects.length / pageSize) || 1;
+                if (currentPage > totalPages) currentPage = totalPages;
+                renderPage();
             } else {
                 toast('Delete failed.', 'err');
-                btn.disabled = false; btn.textContent = 'Delete';
+                btn.disabled = false;
+                btn.textContent = '\u2715';
             }
         })
         .catch(function(err) {
             toast('Error: ' + err, 'err');
-            btn.disabled = false; btn.textContent = 'Delete';
+            btn.disabled = false;
+            btn.textContent = '\u2715';
         });
 }
 
