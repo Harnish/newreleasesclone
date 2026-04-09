@@ -233,6 +233,9 @@ func migrate(db *sql.DB) error {
 	}
 
 	if version < 10 {
+		if _, err := db.Exec(`PRAGMA foreign_keys=OFF`); err != nil {
+			return fmt.Errorf("failed to disable FK for v10: %w", err)
+		}
 		if _, err := db.Exec(`
 			CREATE TABLE users_new (
 				id             TEXT PRIMARY KEY,
@@ -259,6 +262,9 @@ func migrate(db *sql.DB) error {
 		}
 		if _, err := db.Exec(`ALTER TABLE users_new RENAME TO users`); err != nil {
 			return fmt.Errorf("failed to migrate to v10 (rename users_new): %w", err)
+		}
+		if _, err := db.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+			return fmt.Errorf("failed to re-enable FK for v10: %w", err)
 		}
 		if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_rss_token ON users(rss_token) WHERE rss_token IS NOT NULL`); err != nil {
 			return fmt.Errorf("failed to migrate to v10 (rss_token index): %w", err)
