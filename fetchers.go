@@ -359,20 +359,19 @@ func fetchHelmArtifactHub(project Project) []Release {
 	}
 
 	type versionEntry struct {
-		version    string
-		ts         int64
-		prerelease bool
+		version string
+		ts      int64
 	}
 
 	var stable []versionEntry
 	for _, v := range pkgData.AvailableVersions {
 		if !v.Prerelease {
-			stable = append(stable, versionEntry{v.Version, v.TS, v.Prerelease})
+			stable = append(stable, versionEntry{v.Version, v.TS})
 		}
 	}
 	if len(stable) == 0 {
 		for _, v := range pkgData.AvailableVersions {
-			stable = append(stable, versionEntry{v.Version, v.TS, v.Prerelease})
+			stable = append(stable, versionEntry{v.Version, v.TS})
 		}
 	}
 	if len(stable) > 10 {
@@ -385,6 +384,11 @@ func fetchHelmArtifactHub(project Project) []Release {
 		detailResp, err := http.Get(detailURL)
 		if err != nil {
 			log.Printf("⚠ Artifact Hub version detail error for %s@%s: %v", project.Name, v.version, err)
+			continue
+		}
+		if detailResp.StatusCode != 200 {
+			log.Printf("⚠ Artifact Hub version detail returned %d for %s@%s", detailResp.StatusCode, project.Name, v.version)
+			detailResp.Body.Close()
 			continue
 		}
 		var detail struct {

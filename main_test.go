@@ -1790,3 +1790,38 @@ func TestFetchHelmArtifactHubPrereleaseOnlyFallback(t *testing.T) {
 		t.Errorf("got %q", releases[0].Version)
 	}
 }
+
+func TestFetchHelmArtifactHubDetailError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/packages/helm/org/mychart", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"name":        "mychart",
+			"description": "",
+			"available_versions": []map[string]interface{}{
+				{"version": "1.0.0", "ts": int64(1699000000), "prerelease": false},
+			},
+		})
+	})
+	// detail endpoint returns 404
+	mux.HandleFunc("/api/v1/packages/helm/org/mychart/1.0.0", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{"message": "not found"})
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	origBase := artifacthubBaseURL
+	artifacthubBaseURL = server.URL
+	defer func() { artifacthubBaseURL = origBase }()
+
+	releases := fetchHelmArtifactHub(Project{
+		Name:     "mychart",
+		Platform: "helm-artifacthub",
+		RepoURL:  "https://artifacthub.io/packages/helm/org/mychart",
+	})
+
+	if len(releases) != 0 {
+		t.Errorf("expected 0 releases when detail call returns 404, got %d", len(releases))
+	}
+}
