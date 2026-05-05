@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1791,7 +1792,20 @@ func TestFetchHelmArtifactHubPrereleaseOnlyFallback(t *testing.T) {
 	}
 }
 
+// disableHTTPSVerificationForTest temporarily disables TLS certificate verification
+// for the default HTTP client, needed for httptest.NewTLSServer with self-signed certs.
+func disableHTTPSVerificationForTest() func() {
+	oldTransport := http.DefaultClient.Transport
+	http.DefaultClient.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	return func() {
+		http.DefaultClient.Transport = oldTransport
+	}
+}
+
 func TestFetchHelmRepo(t *testing.T) {
+	defer disableHTTPSVerificationForTest()()
 	indexYAML := `apiVersion: v1
 entries:
   redis:
@@ -1812,7 +1826,7 @@ entries:
     - https://charts.example.com/redis-16.0.0-beta.1.tgz
 generated: "2023-10-01T00:00:00Z"
 `
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/index.yaml" {
 			w.Header().Set("Content-Type", "application/yaml")
 			fmt.Fprint(w, indexYAML)
@@ -1854,6 +1868,7 @@ generated: "2023-10-01T00:00:00Z"
 }
 
 func TestFetchHelmRepoChartNotFound(t *testing.T) {
+	defer disableHTTPSVerificationForTest()()
 	indexYAML := `apiVersion: v1
 entries:
   nginx:
@@ -1864,7 +1879,7 @@ entries:
     - https://charts.example.com/nginx-1.0.0.tgz
 generated: "2023-10-01T00:00:00Z"
 `
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, indexYAML)
 	}))
 	defer server.Close()

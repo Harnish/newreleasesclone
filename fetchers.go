@@ -327,7 +327,8 @@ func truncate(s string, maxLen int) string {
 var artifacthubBaseURL = "https://artifacthub.io"
 
 func fetchHelmArtifactHub(project Project) []Release {
-	path := strings.TrimPrefix(project.RepoURL, "https://artifacthub.io/packages/helm/")
+	rawURL := strings.TrimSuffix(project.RepoURL, "/")
+	path := strings.TrimPrefix(rawURL, "https://artifacthub.io/packages/helm/")
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		log.Printf("⚠ Invalid Artifact Hub URL for %s: %s", project.Name, project.RepoURL)
@@ -433,6 +434,10 @@ type helmChartVersion struct {
 }
 
 func fetchHelmRepo(project Project) []Release {
+	if !strings.HasPrefix(project.RepoURL, "https://") {
+		log.Printf("⚠ Helm repo URL must use HTTPS: %s", project.RepoURL)
+		return nil
+	}
 	indexURL := strings.TrimSuffix(project.RepoURL, "/") + "/index.yaml"
 	resp, err := http.Get(indexURL)
 	if err != nil {
