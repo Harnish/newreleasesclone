@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 func fetchGitHubReleases(project Project) []Release {
@@ -413,6 +415,87 @@ func fetchHelmArtifactHub(project Project) []Release {
 			URL:         project.RepoURL,
 			PublishedAt: time.Unix(v.ts, 0),
 			Description: truncate(pkgData.Description, 200),
+		})
+	}
+
+	return releases
+}
+
+type helmIndex struct {
+	Entries map[string][]helmChartVersion `yaml:"entries"`
+}
+
+type helmChartVersion struct {
+	Version    string   `yaml:"version"`
+	AppVersion string   `yaml:"appVersion"`
+	Created    string   `yaml:"created"`
+	URLs       []string `yaml:"urls"`
+}
+
+func fetchHelmRepo(project Project) []Release {
+	indexURL := strings.TrimSuffix(project.RepoURL, "/") + "/index.yaml"
+	resp, err := http.Get(indexURL)
+	if err != nil {
+		log.Printf("⚠ Helm repo index error for %s: %v", project.Name, err)
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Printf("⚠ Helm repo index returned %d for %s", resp.StatusCode, project.Name)
+		return nil
+	}
+
+	var idx helmIndex
+	if err := yaml.NewDecoder(resp.Body).Decode(&idx); err != nil {
+		log.Printf("⚠ Failed to parse Helm index for %s: %v", project.Name, err)
+		return nil
+	}
+
+	entries, ok := idx.Entries[project.Name]
+	if !ok || len(entries) == 0 {
+		log.Printf("⚠ Chart %q not found in Helm repo %s", project.Name, project.RepoURL)
+		return nil
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Created > entries[j].Created
+	})
+
+	var stable []helmChartVersion
+	for _, e := range entries {
+		if !strings.Contains(e.Version, "-") {
+			stable = append(stable, e)
+		}
+	}
+	if len(stable) == 0 {
+		stable = entries
+	}
+	if len(stable) > 10 {
+		stable = stable[:10]
+	}
+
+	var releases []Release
+	for _, e := range stable {
+		pubTime := time.Now()
+		if e.Created != "" {
+			pubTime, _ = time.Parse(time.RFC3339, e.Created)
+		}
+		url := project.RepoURL
+		if len(e.URLs) > 0 {
+			url = e.URLs[0]
+		}
+		version := e.Version
+		if e.AppVersion != "" {
+			version = fmt.Sprintf("%s (app %s)", e.Version, e.AppVersion)
+		}
+		releases = append(releases, Release{
+			ID:          fmt.Sprintf("helm_repo_%s", e.Version),
+			Name:        project.Name,
+			Version:     version,
+			Platform:    "helm-repo",
+			URL:         url,
+			PublishedAt: pubTime,
+			Description: "Helm Chart",
 		})
 	}
 
