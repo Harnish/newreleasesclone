@@ -1015,6 +1015,10 @@ func (s *Store) RefreshProject(repoID string) {
 		releases = fetchDockerTags(project)
 	case "gitlab":
 		releases = fetchGitLabReleases(project)
+	case "helm-artifacthub":
+		releases = fetchHelmArtifactHub(project)
+	case "helm-repo":
+		releases = fetchHelmRepo(project)
 	default:
 		log.Printf("⚠ Unknown platform: %s", project.Platform)
 		return
