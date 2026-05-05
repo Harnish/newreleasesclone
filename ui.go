@@ -283,11 +283,13 @@ body {
     background: #334155;
     color: #94a3b8;
 }
-.badge.github { background: #1e3a5f; color: #60a5fa; }
-.badge.gitlab { background: #2e1f50; color: #c084fc; }
-.badge.npm    { background: #103a26; color: #4ade80; }
-.badge.pypi   { background: #3b2000; color: #fb923c; }
-.badge.docker { background: #0c2a42; color: #38bdf8; }
+.badge.github          { background: #1e3a5f; color: #60a5fa; }
+.badge.gitlab          { background: #2e1f50; color: #c084fc; }
+.badge.npm             { background: #103a26; color: #4ade80; }
+.badge.pypi            { background: #3b2000; color: #fb923c; }
+.badge.docker          { background: #0c2a42; color: #38bdf8; }
+.badge.helm-artifacthub { background: #1a2e1a; color: #4ade80; }
+.badge.helm-repo        { background: #1a2e1a; color: #86efac; }
 
 /* ---- Releases accordion ---- */
 .proj-header {
@@ -523,6 +525,8 @@ body {
                             <option value="npm">NPM</option>
                             <option value="pypi">PyPI</option>
                             <option value="docker">Docker Hub</option>
+                            <option value="helm-artifacthub">Helm (Artifact Hub)</option>
+                            <option value="helm-repo">Helm (Repo)</option>
                             <option value="other">Other / Custom URL</option>
                         </select>
                     </div>
@@ -1297,6 +1301,16 @@ var platformConfig = {
         placeholder: 'e.g., nginx  or  username/image',
         hint: 'Docker Hub image name (official images: just the name)'
     },
+    'helm-artifacthub': {
+        label: 'Artifact Hub URL',
+        placeholder: 'https://artifacthub.io/packages/helm/bitnami/redis',
+        hint: 'Paste the full Artifact Hub chart URL'
+    },
+    'helm-repo': {
+        label: 'Repo base URL',
+        placeholder: 'https://charts.bitnami.com/bitnami',
+        hint: 'Base URL of the Helm repo — enter the chart name in the Name field above'
+    },
     other: {
         label: 'URL',
         placeholder: 'Paste any supported project URL',
@@ -1317,11 +1331,12 @@ function onPlatformChange() {
 }
 
 function detectPlatform(url) {
-    if (/github\.com\//.test(url))           return 'github';
-    if (/gitlab\.com\//.test(url))           return 'gitlab';
-    if (/npmjs\.com\/package\//.test(url))   return 'npm';
-    if (/pypi\.org\/project\//.test(url))    return 'pypi';
-    if (/hub\.docker\.com\/r\//.test(url))   return 'docker';
+    if (/github\.com\//.test(url))                         return 'github';
+    if (/gitlab\.com\//.test(url))                         return 'gitlab';
+    if (/npmjs\.com\/package\//.test(url))                 return 'npm';
+    if (/pypi\.org\/project\//.test(url))                  return 'pypi';
+    if (/hub\.docker\.com\/r\//.test(url))                 return 'docker';
+    if (/artifacthub\.io\/packages\/helm\//.test(url))     return 'helm-artifacthub';
     return null;
 }
 
@@ -1341,6 +1356,8 @@ function extractNameFromURL(platform, url) {
             return url.replace(/^.*pypi\.org\/project\//, '').split('/')[0];
         case 'docker':
             return url.replace(/^.*hub\.docker\.com\/r\//, '').replace(/\/.*$/, '');
+        case 'helm-artifacthub':
+            return url.replace(/^.*artifacthub\.io\/packages\/helm\/[^/]+\//, '').split('/')[0];
     }
     return '';
 }
