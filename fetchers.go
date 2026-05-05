@@ -321,3 +321,96 @@ func truncate(s string, maxLen int) string {
 	}
 	return s[:maxLen] + "..."
 }
+
+var artifacthubBaseURL = "https://artifacthub.io"
+
+func fetchHelmArtifactHub(project Project) []Release {
+	path := strings.TrimPrefix(project.RepoURL, "https://artifacthub.io/packages/helm/")
+	parts := strings.SplitN(path, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		log.Printf("⚠ Invalid Artifact Hub URL for %s: %s", project.Name, project.RepoURL)
+		return nil
+	}
+	repoName, chartName := parts[0], parts[1]
+
+	listURL := fmt.Sprintf("%s/api/v1/packages/helm/%s/%s", artifacthubBaseURL, repoName, chartName)
+	resp, err := http.Get(listURL)
+	if err != nil {
+		log.Printf("⚠ Artifact Hub API error for %s: %v", project.Name, err)
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Printf("⚠ Artifact Hub API returned %d for %s", resp.StatusCode, project.Name)
+		return nil
+	}
+
+	var pkgData struct {
+		Description       string `json:"description"`
+		AvailableVersions []struct {
+			Version    string `json:"version"`
+			TS         int64  `json:"ts"`
+			Prerelease bool   `json:"prerelease"`
+		} `json:"available_versions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&pkgData); err != nil {
+		log.Printf("⚠ Failed to parse Artifact Hub response for %s: %v", project.Name, err)
+		return nil
+	}
+
+	type versionEntry struct {
+		version    string
+		ts         int64
+		prerelease bool
+	}
+
+	var stable []versionEntry
+	for _, v := range pkgData.AvailableVersions {
+		if !v.Prerelease {
+			stable = append(stable, versionEntry{v.Version, v.TS, v.Prerelease})
+		}
+	}
+	if len(stable) == 0 {
+		for _, v := range pkgData.AvailableVersions {
+			stable = append(stable, versionEntry{v.Version, v.TS, v.Prerelease})
+		}
+	}
+	if len(stable) > 10 {
+		stable = stable[:10]
+	}
+
+	var releases []Release
+	for _, v := range stable {
+		detailURL := fmt.Sprintf("%s/api/v1/packages/helm/%s/%s/%s", artifacthubBaseURL, repoName, chartName, v.version)
+		detailResp, err := http.Get(detailURL)
+		if err != nil {
+			log.Printf("⚠ Artifact Hub version detail error for %s@%s: %v", project.Name, v.version, err)
+			continue
+		}
+		var detail struct {
+			AppVersion string `json:"app_version"`
+		}
+		err = json.NewDecoder(detailResp.Body).Decode(&detail)
+		detailResp.Body.Close()
+		if err != nil {
+			log.Printf("⚠ Failed to parse Artifact Hub version detail for %s@%s: %v", project.Name, v.version, err)
+			continue
+		}
+
+		version := v.version
+		if detail.AppVersion != "" {
+			version = fmt.Sprintf("%s (app %s)", v.version, detail.AppVersion)
+		}
+		releases = append(releases, Release{
+			ID:          fmt.Sprintf("helm_ah_%s", v.version),
+			Name:        project.Name,
+			Version:     version,
+			Platform:    "helm-artifacthub",
+			URL:         project.RepoURL,
+			PublishedAt: time.Unix(v.ts, 0),
+			Description: truncate(pkgData.Description, 200),
+		})
+	}
+
+	return releases
+}

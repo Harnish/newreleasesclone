@@ -1702,3 +1702,91 @@ func TestMigrationV10WithExistingData(t *testing.T) {
 		t.Errorf("expected userID %s, got %s", userID, fetchedUserID)
 	}
 }
+
+func TestFetchHelmArtifactHub(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/packages/helm/bitnami/redis", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"name":        "redis",
+			"description": "Redis chart",
+			"available_versions": []map[string]interface{}{
+				{"version": "17.0.0", "ts": int64(1699000000), "prerelease": false},
+				{"version": "16.9.0", "ts": int64(1698000000), "prerelease": false},
+				{"version": "16.0.0-beta.1", "ts": int64(1697000000), "prerelease": true},
+			},
+		})
+	})
+	mux.HandleFunc("/api/v1/packages/helm/bitnami/redis/17.0.0", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{"version": "17.0.0", "app_version": "7.2.1"})
+	})
+	mux.HandleFunc("/api/v1/packages/helm/bitnami/redis/16.9.0", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{"version": "16.9.0", "app_version": "7.0.5"})
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	origBase := artifacthubBaseURL
+	artifacthubBaseURL = server.URL
+	defer func() { artifacthubBaseURL = origBase }()
+
+	project := Project{
+		Name:     "redis",
+		Platform: "helm-artifacthub",
+		RepoURL:  "https://artifacthub.io/packages/helm/bitnami/redis",
+	}
+
+	releases := fetchHelmArtifactHub(project)
+
+	if len(releases) != 2 {
+		t.Fatalf("expected 2 releases (prerelease filtered), got %d", len(releases))
+	}
+	if releases[0].Version != "17.0.0 (app 7.2.1)" {
+		t.Errorf("expected version %q, got %q", "17.0.0 (app 7.2.1)", releases[0].Version)
+	}
+	if releases[0].ID != "helm_ah_17.0.0" {
+		t.Errorf("expected ID %q, got %q", "helm_ah_17.0.0", releases[0].ID)
+	}
+	if releases[1].Version != "16.9.0 (app 7.0.5)" {
+		t.Errorf("expected version %q, got %q", "16.9.0 (app 7.0.5)", releases[1].Version)
+	}
+	if releases[0].Platform != "helm-artifacthub" {
+		t.Errorf("expected platform %q, got %q", "helm-artifacthub", releases[0].Platform)
+	}
+}
+
+func TestFetchHelmArtifactHubPrereleaseOnlyFallback(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/packages/helm/org/chart", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"name":        "chart",
+			"description": "",
+			"available_versions": []map[string]interface{}{
+				{"version": "1.0.0-alpha.1", "ts": int64(1699000000), "prerelease": true},
+			},
+		})
+	})
+	mux.HandleFunc("/api/v1/packages/helm/org/chart/1.0.0-alpha.1", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{"version": "1.0.0-alpha.1", "app_version": "1.0.0"})
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	origBase := artifacthubBaseURL
+	artifacthubBaseURL = server.URL
+	defer func() { artifacthubBaseURL = origBase }()
+
+	releases := fetchHelmArtifactHub(Project{
+		Name:     "chart",
+		Platform: "helm-artifacthub",
+		RepoURL:  "https://artifacthub.io/packages/helm/org/chart",
+	})
+
+	if len(releases) != 1 {
+		t.Fatalf("expected 1 release (fallback to prerelease), got %d", len(releases))
+	}
+	if releases[0].Version != "1.0.0-alpha.1 (app 1.0.0)" {
+		t.Errorf("got %q", releases[0].Version)
+	}
+}
