@@ -1848,6 +1848,9 @@ generated: "2023-10-01T00:00:00Z"
 	if releases[0].Platform != "helm-repo" {
 		t.Errorf("expected platform %q, got %q", "helm-repo", releases[0].Platform)
 	}
+	if releases[0].Description != "Helm Chart" {
+		t.Errorf("expected description %q, got %q", "Helm Chart", releases[0].Description)
+	}
 }
 
 func TestFetchHelmRepoChartNotFound(t *testing.T) {
