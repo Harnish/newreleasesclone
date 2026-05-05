@@ -1393,6 +1393,8 @@ function autoFillName() {
             .replace(/\.git$/, '').replace(/\/$/, '');
         var parts = path.split('/').filter(Boolean);
         name = parts.length >= 2 ? parts[1] : (parts[0] || '');
+    } else if (platform === 'helm-artifacthub') {
+        name = extractNameFromURL(platform, val);
     } else {
         name = val;
     }
@@ -1427,7 +1429,7 @@ document.getElementById('add-form').addEventListener('submit', function(e) {
     if (data.platform === 'other') {
         var detected = detectPlatform(data.repo_url);
         if (!detected) {
-            toast('URL not recognized. Supported: GitHub, GitLab, npmjs.com, pypi.org, hub.docker.com', 'err');
+            toast('URL not recognized. Supported: GitHub, GitLab, npmjs.com, pypi.org, hub.docker.com, artifacthub.io', 'err');
             return;
         }
         data.platform = detected;
