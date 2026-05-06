@@ -152,23 +152,28 @@ body {
 }
 
 /* ---- Releases area (list + slide panel) ---- */
-.releases-area {
-    display: flex;
-    align-items: flex-start;
-    gap: 0;
-}
-#releases-root { flex: 1; min-width: 0; }
+.releases-area {}
+#releases-root {}
 
-/* ---- Slide-over add panel ---- */
-.add-panel {
-    max-width: 0;
-    overflow: hidden;
-    transition: max-width 0.25s ease;
-    flex-shrink: 0;
+/* ---- Slide-over panels (fixed overlay, slides in from right) ---- */
+.add-panel, .settings-panel, .account-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 100;
 }
-.add-panel.open { max-width: 300px; }
-.add-panel-inner {
-    width: 280px;
+.add-panel         { width: 300px; }
+.settings-panel    { width: 380px; }
+.account-panel     { width: 300px; }
+.add-panel.open, .settings-panel.open, .account-panel.open {
+    transform: translateX(0);
+}
+.add-panel-inner, .settings-panel-inner, .account-panel-inner {
+    width: 100%;
     background: #1a2840;
     border-left: 1px solid #2d4a6e;
     padding: 1.1rem 1rem;
@@ -181,37 +186,6 @@ body {
     font-size: 0.9rem;
     font-weight: 700;
     margin-bottom: 1.1rem;
-}
-
-/* ---- Slide-over settings panel ---- */
-.settings-panel {
-    max-width: 0;
-    overflow: hidden;
-    transition: max-width 0.25s ease;
-    flex-shrink: 0;
-}
-.settings-panel.open { max-width: 380px; }
-.settings-panel-inner {
-    width: 360px;
-    background: #1a2840;
-    border-left: 1px solid #2d4a6e;
-    padding: 1.1rem 1rem;
-    min-height: 100%;
-}
-/* ---- Account settings panel ---- */
-.account-panel {
-    max-width: 0;
-    overflow: hidden;
-    transition: max-width 0.25s ease;
-    flex-shrink: 0;
-}
-.account-panel.open { max-width: 300px; }
-.account-panel-inner {
-    width: 280px;
-    background: #1a2840;
-    border-left: 1px solid #2d4a6e;
-    padding: 1.1rem 1rem;
-    min-height: 100%;
 }
 .settings-section { margin-bottom: 1.25rem; }
 .settings-section-title {

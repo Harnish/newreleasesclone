@@ -1,10 +1,10 @@
 # Release Tracker
 
-Track software releases across GitHub, GitLab, NPM, PyPI, and Docker Hub. Multi-user with shared release data.
+Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm charts. Multi-user with shared release data.
 
 ## Features
 
-- **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub
+- **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub, Helm (Artifact Hub & custom repos)
 - **User accounts**: Register/login with session-based auth; each user tracks their own set of projects
 - **Shared release data**: Two users adding the same repo share one set of fetched releases
 - **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
@@ -28,16 +28,23 @@ Register an account on first visit, then add projects to track.
 
 Select a platform, enter the identifier, and a display name is auto-filled:
 
-| Platform          | Enter                  | Example                                     |
-|-------------------|------------------------|---------------------------------------------|
-| GitHub            | `owner/repo`           | `kubernetes/kubernetes`                     |
-| GitLab            | `owner/repo`           | `gitlab-org/gitlab`                         |
-| NPM               | package name           | `react`                                     |
-| PyPI              | package name           | `requests`                                  |
-| Docker Hub        | image name             | `nginx` or `user/image`                     |
-| Other / Custom URL | paste any supported URL | `https://github.com/owner/repo` — platform auto-detected |
+| Platform              | Enter                        | Example                                                         |
+|-----------------------|------------------------------|-----------------------------------------------------------------|
+| GitHub                | `owner/repo`                 | `kubernetes/kubernetes`                                         |
+| GitLab                | `owner/repo`                 | `gitlab-org/gitlab`                                             |
+| NPM                   | package name                 | `react`                                                         |
+| PyPI                  | package name                 | `requests`                                                      |
+| Docker Hub            | image name                   | `nginx` or `user/image`                                         |
+| Helm (Artifact Hub)   | Artifact Hub chart URL       | `https://artifacthub.io/packages/helm/bitnami/redis`            |
+| Helm (Repo)           | repo base URL + chart name   | URL: `https://charts.bitnami.com/bitnami`, Name: `redis`        |
+| Other / Custom URL    | paste any supported URL      | `https://github.com/owner/repo` — platform auto-detected        |
 
 Full URLs are also accepted for GitHub and GitLab in their dedicated fields. The "Other" option accepts any URL from a supported platform and detects it automatically.
+
+### Helm notes
+
+- **Artifact Hub**: paste the full chart page URL; chart name is auto-filled from the URL.
+- **Helm Repo**: enter the repo's base URL (the `index.yaml` parent) and provide a display name matching the chart name. Fetches the latest 10 versions from `index.yaml`.
 
 ## API
 
