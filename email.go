@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"net/smtp"
+	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	gomail "gopkg.in/gomail.v2"
 )
 
 // SMTPConfig holds SMTP connection settings read from environment variables.
@@ -19,12 +21,22 @@ type SMTPConfig struct {
 
 // SMTPConfigFromEnv reads SMTP settings from environment variables.
 // Returns (config, true) if all required vars are present, (zero, false) otherwise.
+// Accepts SMTP_USERNAME as a fallback for SMTP_USER, and FROM_EMAIL as a fallback for SMTP_FROM.
 func SMTPConfigFromEnv() (SMTPConfig, bool) {
 	host := os.Getenv("SMTP_HOST")
 	user := os.Getenv("SMTP_USER")
+	if user == "" {
+		user = os.Getenv("SMTP_USERNAME")
+	}
 	pass := os.Getenv("SMTP_PASS")
 	from := os.Getenv("SMTP_FROM")
-	if host == "" || user == "" || pass == "" || from == "" {
+	if from == "" {
+		from = os.Getenv("FROM_EMAIL")
+	}
+	if from == "" {
+		from = user
+	}
+	if host == "" || user == "" || pass == "" {
 		return SMTPConfig{}, false
 	}
 	port := 587
@@ -36,15 +48,25 @@ func SMTPConfigFromEnv() (SMTPConfig, bool) {
 	return SMTPConfig{Host: host, Port: port, User: user, Pass: pass, From: from}, true
 }
 
-// SendMail sends a plain-text email via SMTP using AUTH PLAIN.
+// SendMail sends a plain-text email via SMTP using gomail.
+// Port 465 uses implicit TLS; port 587 uses STARTTLS.
 func (c SMTPConfig) SendMail(to, subject, body string) error {
-	auth := smtp.PlainAuth("", c.User, c.Pass, c.Host)
-	msg := fmt.Sprintf(
-		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s",
-		c.From, to, subject, body,
-	)
-	addr := fmt.Sprintf("%s:%d", c.Host, c.Port)
-	return smtp.SendMail(addr, auth, c.From, []string{to}, []byte(msg))
+	m := gomail.NewMessage()
+	m.SetHeader("From", c.From)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/plain", body)
+
+	d := gomail.NewDialer(c.Host, c.Port, c.User, c.Pass)
+	d.SSL = c.Port == 465
+
+	log.Printf("smtp: sending to=%s subject=%q", to, subject)
+	if err := d.DialAndSend(m); err != nil {
+		log.Printf("smtp: send failed to=%s subject=%q error=%v", to, subject, err)
+		return err
+	}
+	log.Printf("smtp: sent ok to=%s subject=%q", to, subject)
+	return nil
 }
 
 // SendVerificationEmail sends a verification link email to the given address.
