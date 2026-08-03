@@ -30,11 +30,36 @@ type Webhook struct {
 }
 
 type Project struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Platform     string    `json:"platform"`
-	RepoURL      string    `json:"repo_url"`
-	LastRefresh  time.Time `json:"last_refresh"`
-	RefreshCount int       `json:"refresh_count"`
-	PushEnabled  bool      `json:"push_enabled"`
+	ID                  string    `json:"id"`
+	Name                string    `json:"name"`
+	Platform            string    `json:"platform"`
+	RepoURL             string    `json:"repo_url"`
+	LastRefresh         time.Time `json:"last_refresh"`
+	RefreshCount        int       `json:"refresh_count"`
+	PushEnabled         bool      `json:"push_enabled"`
+	GitLabSyncEnabled   bool      `json:"gitlab_sync_enabled"`
+	GitLabSyncFrequency string    `json:"gitlab_sync_frequency,omitempty"`
+	LastGitLabSyncAt    time.Time `json:"last_gitlab_sync_at,omitempty"`
+	LastGitLabSyncError string    `json:"last_gitlab_sync_error,omitempty"`
+}
+
+type GitLabSettings struct {
+	GitLabURL         string `json:"gitlab_url"`
+	GitLabToken       string `json:"-"`
+	AwesomeEnabled    bool   `json:"awesome_enabled"`
+	AwesomeRepoName   string `json:"awesome_repo_name"`
+	AwesomeGitLabPath string `json:"awesome_gitlab_path"`
+}
+
+type GitLabSyncTarget struct {
+	UserID            string
+	RepoID            string
+	RepoName          string
+	RepoURL           string
+	Platform          string
+	GitLabURL         string
+	GitLabToken       string
+	GitLabProjectPath string
+	Frequency         string
+	LastSyncAt        time.Time
 }

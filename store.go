@@ -274,6 +274,40 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 11 {
+		if _, err := db.Exec(`
+			CREATE TABLE IF NOT EXISTS gitlab_settings (
+				user_id             TEXT PRIMARY KEY REFERENCES users(id),
+				gitlab_url          TEXT NOT NULL DEFAULT '',
+				gitlab_token        TEXT NOT NULL DEFAULT '',
+				awesome_enabled     INTEGER NOT NULL DEFAULT 0,
+				awesome_repo_name   TEXT NOT NULL DEFAULT '',
+				awesome_gitlab_path TEXT NOT NULL DEFAULT '',
+				updated_at          TEXT NOT NULL DEFAULT ''
+			);
+		`); err != nil {
+			return fmt.Errorf("failed to migrate to v11 (gitlab_settings table): %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN gitlab_sync_enabled INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("failed to migrate to v11 (gitlab_sync_enabled): %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN gitlab_sync_frequency TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("failed to migrate to v11 (gitlab_sync_frequency): %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN gitlab_project_path TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("failed to migrate to v11 (gitlab_project_path): %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN last_gitlab_sync_at TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("failed to migrate to v11 (last_gitlab_sync_at): %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN last_gitlab_sync_error TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("failed to migrate to v11 (last_gitlab_sync_error): %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 11"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -414,6 +448,176 @@ func (s *Store) SetProjectPushEnabled(userID, repoID string, enabled bool) (bool
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+// ---- GitLab sync ----
+
+func (s *Store) SaveGitLabSettings(userID, gitlabURL, token string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO gitlab_settings (user_id, gitlab_url, gitlab_token, updated_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(user_id) DO UPDATE SET
+			gitlab_url = excluded.gitlab_url,
+			gitlab_token = excluded.gitlab_token,
+			updated_at = excluded.updated_at`,
+		userID, gitlabURL, token, time.Now().Format(time.RFC3339))
+	return err
+}
+
+func (s *Store) GetGitLabSettings(userID string) (GitLabSettings, error) {
+	var g GitLabSettings
+	var awesomeEnabled int
+	err := s.db.QueryRow(`
+		SELECT gitlab_url, gitlab_token, awesome_enabled, awesome_repo_name, awesome_gitlab_path
+		FROM gitlab_settings WHERE user_id = ?`, userID,
+	).Scan(&g.GitLabURL, &g.GitLabToken, &awesomeEnabled, &g.AwesomeRepoName, &g.AwesomeGitLabPath)
+	if err == sql.ErrNoRows {
+		return GitLabSettings{}, nil
+	}
+	if err != nil {
+		return GitLabSettings{}, err
+	}
+	g.AwesomeEnabled = awesomeEnabled != 0
+	return g, nil
+}
+
+// SetAwesomeConfig requires a gitlab_settings row to already exist (the user
+// must save their GitLab URL/token before enabling the Awesome page).
+// Clears awesome_gitlab_path so a renamed repo gets recreated rather than
+// reusing a stale project path.
+func (s *Store) SetAwesomeConfig(userID, repoName string, enabled bool) error {
+	val := 0
+	if enabled {
+		val = 1
+	}
+	res, err := s.db.Exec(`
+		UPDATE gitlab_settings
+		SET awesome_enabled = ?, awesome_repo_name = ?, awesome_gitlab_path = ''
+		WHERE user_id = ?`,
+		val, repoName, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("configure your gitlab instance before enabling the awesome page")
+	}
+	return nil
+}
+
+func (s *Store) SetAwesomeGitLabPath(userID, httpURL string) error {
+	_, err := s.db.Exec(`UPDATE gitlab_settings SET awesome_gitlab_path = ? WHERE user_id = ?`, httpURL, userID)
+	return err
+}
+
+// SetProjectGitLabSync enables/disables GitLab mirror sync for a project.
+// Enabling requires the repo's platform be github or gitlab (the only
+// platforms with a git-clonable repo_url). Disabling clears the stored
+// frequency so a stale value can't resurface on a future re-enable that
+// omits it.
+func (s *Store) SetProjectGitLabSync(userID, repoID string, enabled bool, frequency string) (bool, error) {
+	if enabled {
+		var platform string
+		if err := s.db.QueryRow("SELECT platform FROM repos WHERE id = ?", repoID).Scan(&platform); err != nil {
+			return false, fmt.Errorf("repo not found: %w", err)
+		}
+		if platform != "github" && platform != "gitlab" {
+			return false, fmt.Errorf("gitlab sync is only supported for github and gitlab projects")
+		}
+	}
+	enabledVal := 0
+	freqVal := frequency
+	if enabled {
+		enabledVal = 1
+	} else {
+		freqVal = ""
+	}
+	res, err := s.db.Exec(
+		"UPDATE user_repos SET gitlab_sync_enabled = ?, gitlab_sync_frequency = ? WHERE user_id = ? AND repo_id = ?",
+		enabledVal, freqVal, userID, repoID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+func (s *Store) SetProjectGitLabPath(userID, repoID, httpURL string) error {
+	_, err := s.db.Exec(
+		"UPDATE user_repos SET gitlab_project_path = ? WHERE user_id = ? AND repo_id = ?",
+		httpURL, userID, repoID,
+	)
+	return err
+}
+
+func (s *Store) RecordGitLabSync(userID, repoID string, syncErr error) error {
+	errMsg := ""
+	if syncErr != nil {
+		errMsg = syncErr.Error()
+	}
+	_, err := s.db.Exec(`
+		UPDATE user_repos
+		SET last_gitlab_sync_at = ?, last_gitlab_sync_error = ?
+		WHERE user_id = ? AND repo_id = ?`,
+		time.Now().Format(time.RFC3339), errMsg, userID, repoID)
+	return err
+}
+
+// GetAllEnabledGitLabSyncTargets returns every user's GitLab-sync-enabled
+// projects, across all users. Requires the user to have saved gitlab_settings
+// (inner join) — a project enabled before configuring GitLab simply won't
+// appear here until settings are saved.
+func (s *Store) GetAllEnabledGitLabSyncTargets() []GitLabSyncTarget {
+	rows, err := s.db.Query(`
+		SELECT ur.user_id, r.id, r.name, r.repo_url, r.platform,
+		       gs.gitlab_url, gs.gitlab_token,
+		       ur.gitlab_project_path, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at
+		FROM user_repos ur
+		INNER JOIN repos r ON r.id = ur.repo_id
+		INNER JOIN gitlab_settings gs ON gs.user_id = ur.user_id
+		WHERE ur.gitlab_sync_enabled = 1`)
+	if err != nil {
+		log.Printf("⚠ Failed to query gitlab sync targets: %v", err)
+		return nil
+	}
+	defer rows.Close()
+	return scanGitLabSyncTargets(rows)
+}
+
+func (s *Store) GetUserGitLabSyncTargets(userID string) []GitLabSyncTarget {
+	rows, err := s.db.Query(`
+		SELECT ur.user_id, r.id, r.name, r.repo_url, r.platform,
+		       gs.gitlab_url, gs.gitlab_token,
+		       ur.gitlab_project_path, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at
+		FROM user_repos ur
+		INNER JOIN repos r ON r.id = ur.repo_id
+		INNER JOIN gitlab_settings gs ON gs.user_id = ur.user_id
+		WHERE ur.gitlab_sync_enabled = 1 AND ur.user_id = ?`, userID)
+	if err != nil {
+		log.Printf("⚠ Failed to query user gitlab sync targets: %v", err)
+		return nil
+	}
+	defer rows.Close()
+	return scanGitLabSyncTargets(rows)
+}
+
+func scanGitLabSyncTargets(rows *sql.Rows) []GitLabSyncTarget {
+	var targets []GitLabSyncTarget
+	for rows.Next() {
+		var t GitLabSyncTarget
+		var lastSync string
+		if err := rows.Scan(&t.UserID, &t.RepoID, &t.RepoName, &t.RepoURL, &t.Platform,
+			&t.GitLabURL, &t.GitLabToken, &t.GitLabProjectPath, &t.Frequency, &lastSync); err != nil {
+			log.Printf("⚠ Failed to scan gitlab sync target: %v", err)
+			continue
+		}
+		if lastSync != "" {
+			t.LastSyncAt, _ = time.Parse(time.RFC3339, lastSync)
+		}
+		targets = append(targets, t)
+	}
+	return targets
 }
 
 func (s *Store) getWebhooksForRepo(repoID string) []struct {
@@ -795,7 +999,8 @@ func (s *Store) RemoveUserRepo(userID, repoID string) bool {
 
 func (s *Store) GetUserRepos(userID string) []Project {
 	rows, err := s.db.Query(`
-		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled
+		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled,
+		       ur.gitlab_sync_enabled, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error
 		FROM repos r
 		INNER JOIN user_repos ur ON ur.repo_id = r.id
 		WHERE ur.user_id = ?
@@ -808,16 +1013,21 @@ func (s *Store) GetUserRepos(userID string) []Project {
 	projects := []Project{}
 	for rows.Next() {
 		var p Project
-		var lastRefresh string
-		var pushEnabled int
-		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled); err != nil {
+		var lastRefresh, lastGitLabSync string
+		var pushEnabled, gitlabSyncEnabled int
+		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled,
+			&gitlabSyncEnabled, &p.GitLabSyncFrequency, &lastGitLabSync, &p.LastGitLabSyncError); err != nil {
 			log.Printf("⚠ Failed to scan project: %v", err)
 			continue
 		}
 		if lastRefresh != "" {
 			p.LastRefresh, _ = time.Parse(time.RFC3339, lastRefresh)
 		}
+		if lastGitLabSync != "" {
+			p.LastGitLabSyncAt, _ = time.Parse(time.RFC3339, lastGitLabSync)
+		}
 		p.PushEnabled = pushEnabled != 0
+		p.GitLabSyncEnabled = gitlabSyncEnabled != 0
 		projects = append(projects, p)
 	}
 	return projects
