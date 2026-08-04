@@ -2,12 +2,24 @@ package main
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
+// withLoopbackAllowedForTests lets a test's httptest.NewServer (always on
+// 127.0.0.1) pass the production dial-time SSRF guard, scoped to just this
+// test via t.Cleanup.
+func withLoopbackAllowedForTests(t *testing.T) {
+	t.Helper()
+	allowLoopbackInTests.Store(true)
+	t.Cleanup(func() { allowLoopbackInTests.Store(false) })
+}
+
 func TestGitLabProjectExistsAndCreateProject(t *testing.T) {
+	withLoopbackAllowedForTests(t)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/my-repo", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
@@ -94,6 +106,51 @@ func TestValidateGitLabURLRejectsInternalAddresses(t *testing.T) {
 func TestValidateGitLabURLAcceptsPublicHost(t *testing.T) {
 	if err := validateGitLabURL("https://gitlab.com"); err != nil {
 		t.Errorf("validateGitLabURL(gitlab.com) = %v, want nil for a public host", err)
+	}
+}
+
+func TestIsDisallowedIPExpandedRanges(t *testing.T) {
+	disallowed := []string{
+		"100.64.0.1",     // CGNAT (100.64.0.0/10)
+		"100.127.255.254", // top of CGNAT range
+		"0.0.0.1",         // 0.0.0.0/8 "this network"
+		"::ffff:127.0.0.1", // IPv4-mapped IPv6 loopback
+		"::ffff:169.254.169.254", // IPv4-mapped IPv6 link-local
+	}
+	for _, s := range disallowed {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			t.Fatalf("net.ParseIP(%q) = nil", s)
+		}
+		if !isDisallowedIP(ip) {
+			t.Errorf("isDisallowedIP(%q) = false, want true", s)
+		}
+	}
+
+	allowed := []string{"8.8.8.8", "1.1.1.1"}
+	for _, s := range allowed {
+		ip := net.ParseIP(s)
+		if isDisallowedIP(ip) {
+			t.Errorf("isDisallowedIP(%q) = true, want false (public address)", s)
+		}
+	}
+}
+
+// TestGitLabClientRefusesToDialDisallowedIP proves the connection-time
+// guard (not just the registration-time validateGitLabURL check) actually
+// blocks requests. This is the layer that closes the DNS-rebinding/TOCTOU
+// gap: a hostname could resolve to a public IP when validateGitLabURL ran
+// and to an internal one by the time a request actually connects.
+// newGitLabClient is called directly here (bypassing validateGitLabURL
+// entirely) to isolate and prove this second layer on its own.
+func TestGitLabClientRefusesToDialDisallowedIP(t *testing.T) {
+	c := newGitLabClient("http://127.0.0.1:1", "tok")
+	_, err := c.ProjectExists("whatever")
+	if err == nil {
+		t.Fatal("ProjectExists() against 127.0.0.1 = nil error, want the dial rejected")
+	}
+	if !strings.Contains(err.Error(), "disallowed") {
+		t.Errorf("error = %v, want it to mention the disallowed-address rejection specifically (not e.g. a generic connection-refused)", err)
 	}
 }
 

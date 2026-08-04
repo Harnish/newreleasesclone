@@ -20,6 +20,7 @@ func TestDoSyncProjectToGitLabRequiresConfig(t *testing.T) {
 }
 
 func TestDoSyncProjectToGitLabCreatesAndPushes(t *testing.T) {
+	withLoopbackAllowedForTests(t)
 	s := newTestStore(t)
 	oldStore := store
 	store = s

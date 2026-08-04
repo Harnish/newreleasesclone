@@ -50,6 +50,7 @@ func TestSyncAwesomePageNoOpWhenDisabled(t *testing.T) {
 }
 
 func TestSyncAwesomePageCreatesAndPushes(t *testing.T) {
+	withLoopbackAllowedForTests(t)
 	s := newTestStore(t)
 	oldStore := store
 	store = s

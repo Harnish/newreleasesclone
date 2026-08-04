@@ -8,8 +8,18 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 )
+
+// allowLoopbackInTests lets test doubles (httptest.NewServer, which always
+// binds 127.0.0.1) run through the same dial path production traffic uses,
+// without weakening the SSRF guard for the real server. Always false in
+// production — only test code (via withLoopbackAllowedForTests) sets it.
+// atomic because dial Control callbacks can run on a background goroutine
+// concurrently with test cleanup.
+var allowLoopbackInTests atomic.Bool
 
 // GitLabClient is a minimal GitLab REST v4 client, ported from
 // /home/jharnish/Work/syncrepos/syncrepos/internal/gitlab/client.go.
@@ -29,7 +39,8 @@ func newGitLabClient(baseURL, token string) *GitLabClient {
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		token:   token,
 		http: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: gitLabHTTPTransport,
 			// Don't follow redirects: a validated gitlab_url (see
 			// validateGitLabURL) could otherwise redirect requests to an
 			// internal address after the fact, bypassing the SSRF check.
@@ -137,16 +148,81 @@ func (c *GitLabClient) do(method, path string, reqBody, out any) (int, error) {
 	return resp.StatusCode, nil
 }
 
-// validateGitLabURL rejects URLs that don't resolve to a public address.
-// gitlab_url is user-supplied (any newreleases account can register one via
-// POST /api/gitlab-settings), and the server subsequently makes
-// authenticated-looking requests to it (project lookup/creation) and mirror
-// git-pushes to whatever project URL it returns. Without this check, a user
-// could point gitlab_url at an internal service or cloud metadata endpoint
-// (e.g. 169.254.169.254) and have the server probe/attack it on their
-// behalf — classic SSRF. Checked at registration time (POST
-// /api/gitlab-settings) rather than per-request, since every sync reuses
-// the stored URL.
+var disallowedIPRanges = mustParseCIDRs(
+	"100.64.0.0/10", // CGNAT
+	"0.0.0.0/8",     // "this network"
+)
+
+func mustParseCIDRs(cidrs ...string) []*net.IPNet {
+	nets := make([]*net.IPNet, len(cidrs))
+	for i, c := range cidrs {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			panic(err)
+		}
+		nets[i] = n
+	}
+	return nets
+}
+
+// isDisallowedIP reports whether ip must not be reached by outbound
+// requests to a user-supplied GitLab URL: loopback, link-local, private
+// (RFC1918/ULA), unspecified, multicast, CGNAT, and the 0.0.0.0/8 "this
+// network" range. IPv4-mapped IPv6 addresses are normalized via To4() first
+// so ::ffff:127.0.0.1-style addresses can't bypass the IPv4-range checks.
+func isDisallowedIP(ip net.IP) bool {
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
+		return true
+	}
+	for _, n := range disallowedIPRanges {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// gitLabHTTPTransport is shared by every GitLabClient. Its dialer
+// re-validates the resolved IP on every connection, not just once at
+// registration — closing a DNS-rebinding/TOCTOU gap that a
+// registration-time-only check (validateGitLabURL) leaves open: a
+// user-controlled hostname can resolve to a public IP when saved and to an
+// internal one by the time a sync actually connects, arbitrarily later.
+// net.Dialer.Control runs after DNS resolution but before the connect()
+// syscall, so it sees the real destination IP for every request.
+var gitLabHTTPTransport = &http.Transport{
+	DialContext: (&net.Dialer{
+		Timeout: 10 * time.Second,
+		Control: func(network, address string, c syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			ip := net.ParseIP(host)
+			if ip == nil {
+				return fmt.Errorf("refusing to dial non-IP address %q", host)
+			}
+			if isDisallowedIP(ip) && !(ip.IsLoopback() && allowLoopbackInTests.Load()) {
+				return fmt.Errorf("refusing to dial disallowed address %s", ip)
+			}
+			return nil
+		},
+	}).DialContext,
+}
+
+// validateGitLabURL rejects URLs that don't resolve to a public address at
+// registration time. This is a fast-fail UX check, not the security
+// boundary — gitLabHTTPTransport's dial-time Control enforces the same
+// denylist on every actual connection, which is what prevents a
+// DNS-rebinding bypass of this check. gitlab_url is user-supplied (any
+// newreleases account can register one via POST /api/gitlab-settings), and
+// the server subsequently makes authenticated-looking requests to it
+// (project lookup/creation) and mirror git-pushes to whatever project URL
+// it returns — SSRF if unvalidated.
 func validateGitLabURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -164,8 +240,7 @@ func validateGitLabURL(rawURL string) error {
 		return fmt.Errorf("could not resolve gitlab_url host %q: %w", host, err)
 	}
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-			ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
+		if isDisallowedIP(ip) {
 			return fmt.Errorf("gitlab_url resolves to a disallowed address")
 		}
 	}
