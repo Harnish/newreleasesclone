@@ -37,7 +37,7 @@ func TestHandleGitLabSettingsPOST(t *testing.T) {
 	defer func() { store = oldStore }()
 	_, cookie := newTestAuth(t, s)
 
-	body, _ := json.Marshal(map[string]string{"gitlab_url": "https://gitlab.example.com", "gitlab_token": "tok"})
+	body, _ := json.Marshal(map[string]string{"gitlab_url": "https://example.com", "gitlab_token": "tok"})
 	req := httptest.NewRequest(http.MethodPost, "/api/gitlab-settings", bytes.NewReader(body))
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
@@ -53,7 +53,7 @@ func TestHandleGitLabSettingsPOST(t *testing.T) {
 	requireAuth(handleGitLabSettings).ServeHTTP(getW, getReq)
 	var got map[string]any
 	json.NewDecoder(getW.Body).Decode(&got)
-	if got["has_token"] != true || got["gitlab_url"] != "https://gitlab.example.com" {
+	if got["has_token"] != true || got["gitlab_url"] != "https://example.com" {
 		t.Errorf("GET after POST = %+v, want has_token=true url set", got)
 	}
 }

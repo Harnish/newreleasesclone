@@ -73,6 +73,30 @@ func TestGitLabAuthenticatedPushURL(t *testing.T) {
 	}
 }
 
+func TestValidateGitLabURLRejectsInternalAddresses(t *testing.T) {
+	bad := []string{
+		"http://127.0.0.1/",
+		"http://localhost/",
+		"http://169.254.169.254/latest/meta-data/",
+		"http://10.0.0.5/",
+		"http://192.168.1.1/",
+		"http://[::1]/",
+		"ftp://gitlab.example.com",
+		"not-a-url",
+	}
+	for _, u := range bad {
+		if err := validateGitLabURL(u); err == nil {
+			t.Errorf("validateGitLabURL(%q) = nil, want rejection", u)
+		}
+	}
+}
+
+func TestValidateGitLabURLAcceptsPublicHost(t *testing.T) {
+	if err := validateGitLabURL("https://gitlab.com"); err != nil {
+		t.Errorf("validateGitLabURL(gitlab.com) = %v, want nil for a public host", err)
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"My Repo", "my-repo"},

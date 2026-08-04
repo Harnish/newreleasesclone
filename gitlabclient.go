@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -27,7 +28,15 @@ func newGitLabClient(baseURL, token string) *GitLabClient {
 	return &GitLabClient{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		token:   token,
-		http:    &http.Client{Timeout: 30 * time.Second},
+		http: &http.Client{
+			Timeout: 30 * time.Second,
+			// Don't follow redirects: a validated gitlab_url (see
+			// validateGitLabURL) could otherwise redirect requests to an
+			// internal address after the fact, bypassing the SSRF check.
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 	}
 }
 
@@ -126,6 +135,41 @@ func (c *GitLabClient) do(method, path string, reqBody, out any) (int, error) {
 		}
 	}
 	return resp.StatusCode, nil
+}
+
+// validateGitLabURL rejects URLs that don't resolve to a public address.
+// gitlab_url is user-supplied (any newreleases account can register one via
+// POST /api/gitlab-settings), and the server subsequently makes
+// authenticated-looking requests to it (project lookup/creation) and mirror
+// git-pushes to whatever project URL it returns. Without this check, a user
+// could point gitlab_url at an internal service or cloud metadata endpoint
+// (e.g. 169.254.169.254) and have the server probe/attack it on their
+// behalf — classic SSRF. Checked at registration time (POST
+// /api/gitlab-settings) rather than per-request, since every sync reuses
+// the stored URL.
+func validateGitLabURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid gitlab_url: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("gitlab_url must start with http:// or https://")
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("gitlab_url must include a host")
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("could not resolve gitlab_url host %q: %w", host, err)
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+			ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() {
+			return fmt.Errorf("gitlab_url resolves to a disallowed address")
+		}
+	}
+	return nil
 }
 
 // slugify lowercases name and collapses runs of non-alphanumeric characters

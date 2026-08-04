@@ -367,8 +367,8 @@ func handleGitLabSettings(w http.ResponseWriter, r *http.Request, userID string)
 			http.Error(w, "gitlab_url and gitlab_token are required", http.StatusBadRequest)
 			return
 		}
-		if !strings.HasPrefix(req.GitLabURL, "http://") && !strings.HasPrefix(req.GitLabURL, "https://") {
-			http.Error(w, "gitlab_url must start with http:// or https://", http.StatusBadRequest)
+		if err := validateGitLabURL(req.GitLabURL); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if err := store.SaveGitLabSettings(userID, req.GitLabURL, req.GitLabToken); err != nil {
