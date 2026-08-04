@@ -47,3 +47,45 @@ func sendDailyDigestToAll() {
 		}
 	}
 }
+
+// ---- GitLab sync scheduling ----
+
+func gitlabSyncFrequencyDuration(freq string) time.Duration {
+	switch freq {
+	case "weekly":
+		return 7 * 24 * time.Hour
+	case "monthly":
+		return 30 * 24 * time.Hour
+	default:
+		return 24 * time.Hour
+	}
+}
+
+func gitlabSyncDue(lastSyncAt time.Time, freq string) bool {
+	if lastSyncAt.IsZero() {
+		return true
+	}
+	return time.Since(lastSyncAt) > gitlabSyncFrequencyDuration(freq)
+}
+
+// runGitLabSyncScheduler checks hourly for GitLab-sync-enabled projects that
+// are due per their daily/weekly/monthly frequency and fires a background
+// sync for each. Hourly (not once-daily like runDailyDigest) because
+// frequency is per-project and the coarsest granularity (daily) needs finer
+// polling than a once-a-day tick to fire promptly.
+func runGitLabSyncScheduler() {
+	checkDueGitLabSyncs()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		checkDueGitLabSyncs()
+	}
+}
+
+func checkDueGitLabSyncs() {
+	for _, t := range store.GetAllEnabledGitLabSyncTargets() {
+		if gitlabSyncDue(t.LastSyncAt, t.Frequency) {
+			go syncProjectToGitLab(t)
+		}
+	}
+}
