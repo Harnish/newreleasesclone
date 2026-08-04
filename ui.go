@@ -755,9 +755,13 @@ function loadAccountPanel() {
     loading.textContent = 'Loading...';
     body.appendChild(loading);
 
-    fetch('/api/account-settings')
-        .then(function(r) { return r.json(); })
-        .then(function(settings) {
+    Promise.all([
+        fetch('/api/account-settings').then(function(r) { return r.json(); }),
+        fetch('/api/gitlab-settings').then(function(r) { return r.json(); })
+    ])
+        .then(function(res) {
+            var settings = res[0];
+            var gitlabSettings = res[1];
             var smtpOk = !!(currentUser && currentUser.smtp_enabled);
             var verifiedOk = !!(currentUser && currentUser.email_verified);
             var canUse = smtpOk && verifiedOk;
@@ -832,6 +836,63 @@ function loadAccountPanel() {
                 rssSection.appendChild(rssRow);
                 body.appendChild(rssSection);
             }
+
+            var glSection = document.createElement('div');
+            glSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
+            var glLabel = document.createElement('div');
+            glLabel.style.cssText = 'font-size:0.8rem;color:#64748b;margin-bottom:0.4rem';
+            glLabel.textContent = 'GitLab Sync';
+            glSection.appendChild(glLabel);
+
+            var glUrlInput = document.createElement('input');
+            glUrlInput.type = 'url';
+            glUrlInput.id = 'gitlab-url-input';
+            glUrlInput.placeholder = 'https://gitlab.example.com';
+            glUrlInput.value = gitlabSettings.gitlab_url || '';
+            glUrlInput.className = 'webhook-input';
+            glUrlInput.style.cssText = 'width:100%;margin-bottom:0.4rem;box-sizing:border-box';
+            glSection.appendChild(glUrlInput);
+
+            var glTokenInput = document.createElement('input');
+            glTokenInput.type = 'password';
+            glTokenInput.id = 'gitlab-token-input';
+            glTokenInput.placeholder = gitlabSettings.has_token ? 'Token saved (enter to replace)' : 'API token';
+            glTokenInput.className = 'webhook-input';
+            glTokenInput.style.cssText = 'width:100%;margin-bottom:0.4rem;box-sizing:border-box';
+            glSection.appendChild(glTokenInput);
+
+            var glSaveBtn = document.createElement('button');
+            glSaveBtn.className = 'btn btn-primary';
+            glSaveBtn.style.cssText = 'font-size:0.78rem';
+            glSaveBtn.textContent = 'Save GitLab Settings';
+            glSaveBtn.onclick = function() { saveGitLabSettings(); };
+            glSection.appendChild(glSaveBtn);
+
+            var awesomeRow = document.createElement('div');
+            awesomeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0;margin-top:0.6rem;border-top:1px solid #1a2535';
+            var awesomeLbl = document.createElement('label');
+            awesomeLbl.htmlFor = 'awesome-toggle';
+            awesomeLbl.style.cssText = 'font-size:0.85rem;cursor:pointer';
+            awesomeLbl.textContent = 'Generate Awesome page';
+            var awesomeChk = document.createElement('input');
+            awesomeChk.type = 'checkbox';
+            awesomeChk.id = 'awesome-toggle';
+            awesomeChk.checked = !!gitlabSettings.awesome_enabled;
+            awesomeChk.onchange = function() { onAwesomeToggle(this); };
+            awesomeRow.appendChild(awesomeLbl);
+            awesomeRow.appendChild(awesomeChk);
+            glSection.appendChild(awesomeRow);
+
+            var awesomeNameInput = document.createElement('input');
+            awesomeNameInput.type = 'text';
+            awesomeNameInput.id = 'awesome-repo-name-input';
+            awesomeNameInput.className = 'webhook-input';
+            awesomeNameInput.placeholder = 'Repo name (e.g. my-awesome-repos)';
+            awesomeNameInput.value = gitlabSettings.awesome_repo_name || '';
+            awesomeNameInput.style.cssText = 'width:100%;margin-top:0.3rem;box-sizing:border-box;display:' + (gitlabSettings.awesome_enabled ? 'block' : 'none');
+            glSection.appendChild(awesomeNameInput);
+
+            body.appendChild(glSection);
         })
         .catch(function() {
             body.textContent = '';
@@ -853,6 +914,51 @@ function toggleEmailDigest(checkbox) {
     }).catch(function() {
         checkbox.checked = !checkbox.checked;
         toast('Failed to save settings', 'error');
+    });
+}
+
+function saveGitLabSettings() {
+    var url = document.getElementById('gitlab-url-input').value.trim();
+    var token = document.getElementById('gitlab-token-input').value;
+    if (!url || !token) { toast('GitLab URL and token are required', 'err'); return; }
+    fetch('/api/gitlab-settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({gitlab_url: url, gitlab_token: token})
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
+        toast('GitLab settings saved', 'ok');
+        document.getElementById('gitlab-token-input').value = '';
+        document.getElementById('gitlab-token-input').placeholder = 'Token saved (enter to replace)';
+    }).catch(function(err) { toast('Error: ' + err, 'err'); });
+}
+
+function onAwesomeToggle(checkbox) {
+    var nameInput = document.getElementById('awesome-repo-name-input');
+    var repoName = nameInput.value.trim();
+    if (checkbox.checked && !repoName) {
+        toast('Enter a repo name for the Awesome page', 'err');
+        checkbox.checked = false;
+        return;
+    }
+    nameInput.style.display = checkbox.checked ? 'block' : 'none';
+    fetch('/api/gitlab-settings/awesome', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled: checkbox.checked, repo_name: repoName})
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
+        return r.json().then(function(body) {
+            if (body.warning) {
+                toast('Awesome page settings saved, but sync failed: ' + body.warning, 'err');
+                return;
+            }
+            toast(checkbox.checked ? 'Awesome page enabled' : 'Awesome page disabled', 'ok');
+        });
+    }).catch(function(err) {
+        checkbox.checked = !checkbox.checked;
+        nameInput.style.display = checkbox.checked ? 'block' : 'none';
+        toast('Error: ' + err, 'err');
     });
 }
 
