@@ -1030,6 +1030,9 @@ function buildReleasesHTML(releases, projects) {
                     '<button class="btn btn-ghost proj-ctrl" title="Settings" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
                         'data-push="' + (proj && proj.push_enabled ? '1' : '0') + '" ' +
+                        'data-gitlab-enabled="' + (proj && proj.gitlab_sync_enabled ? '1' : '0') + '" ' +
+                        'data-gitlab-freq="' + esc((proj && proj.gitlab_sync_frequency) || 'daily') + '" ' +
+                        'data-gitlab-error="' + esc((proj && proj.last_gitlab_sync_error) || '') + '" ' +
                         'onclick="openSettingsPanel(this)">&#x2699;</button>' +
                     '<button class="btn btn-ghost proj-ctrl" title="Delete" style="color:#f87171" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
@@ -1116,7 +1119,8 @@ function loadReleases() {
         if (_settingsRepoID) {
             var fresh = allProjects.filter(function(p) { return p.id === _settingsRepoID; })[0];
             if (fresh) {
-                loadSettingsPanel(_settingsRepoID, fresh.push_enabled);
+                loadSettingsPanel(_settingsRepoID, fresh.push_enabled,
+                    fresh.gitlab_sync_enabled, fresh.gitlab_sync_frequency || 'daily', fresh.last_gitlab_sync_error || '');
             } else {
                 closeSettingsPanel();
                 _settingsRepoID = null;
@@ -1135,12 +1139,15 @@ function openSettingsPanel(btn) {
     var id = btn.dataset.id;
     var name = btn.dataset.name;
     var pushEnabled = btn.dataset.push === '1';
+    var glEnabled = btn.dataset.gitlabEnabled === '1';
+    var glFreq = btn.dataset.gitlabFreq || 'daily';
+    var glError = btn.dataset.gitlabError || '';
     _settingsRepoID = id;
     document.getElementById('settings-panel-title').textContent = name;
     closeAddPanel();
     closeAccountPanel();
     document.getElementById('settings-panel').classList.add('open');
-    loadSettingsPanel(id, pushEnabled);
+    loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError);
 }
 
 function closeSettingsPanel() {
@@ -1148,20 +1155,20 @@ function closeSettingsPanel() {
     _settingsRepoID = null;
 }
 
-function loadSettingsPanel(id, pushEnabled) {
+function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError) {
     var body = document.getElementById('settings-panel-body');
     body.innerHTML = '<div style="font-size:0.85rem;color:#64748b">Loading...</div>';
     fetch('/api/webhooks?repo_id=' + encodeURIComponent(id))
         .then(function(r) { return r.json(); })
         .then(function(hooks) {
-            body.innerHTML = renderSettingsPanelBody(id, pushEnabled, hooks || []);
+            body.innerHTML = renderSettingsPanelBody(id, pushEnabled, hooks || [], glEnabled, glFreq, glError);
         })
         .catch(function() {
             body.innerHTML = '<div style="color:#f87171;font-size:0.85rem">Failed to load settings.</div>';
         });
 }
 
-function renderSettingsPanelBody(id, pushEnabled, hooks) {
+function renderSettingsPanelBody(id, pushEnabled, hooks, glEnabled, glFreq, glError) {
     return '<div class="settings-section">' +
             '<div class="settings-section-title">Push Notifications</div>' +
             '<div class="toggle-row">' +
@@ -1173,9 +1180,67 @@ function renderSettingsPanelBody(id, pushEnabled, hooks) {
             '</div>' +
         '</div>' +
         '<div class="settings-section">' +
+            '<div class="settings-section-title">GitLab Sync</div>' +
+            renderGitLabSyncSection(id, glEnabled, glFreq, glError) +
+        '</div>' +
+        '<div class="settings-section">' +
             '<div class="settings-section-title">Webhooks</div>' +
             '<div id="whpanel-' + esc(id) + '">' + renderWebhookPanel(id, hooks) + '</div>' +
         '</div>';
+}
+
+function renderGitLabSyncSection(id, enabled, freq, err) {
+    var freqOptions = ['daily', 'weekly', 'monthly'].map(function(f) {
+        return '<option value="' + f + '"' + (f === freq ? ' selected' : '') + '>' +
+            f.charAt(0).toUpperCase() + f.slice(1) + '</option>';
+    }).join('');
+    var errHtml = err ? '<div style="color:#f87171;font-size:0.75rem;margin-top:0.3rem">' + esc(err) + '</div>' : '';
+    if (!enabled) {
+        return '<div class="webhook-add" style="margin-top:0">' +
+                '<select id="gl-freq-' + esc(id) + '" class="webhook-input">' + freqOptions + '</select>' +
+                '<button class="btn btn-primary" style="font-size:0.78rem" onclick="doEnableGitLabSync(\'' + esc(id) + '\')">Enable Sync</button>' +
+            '</div>' + errHtml;
+    }
+    return '<div class="toggle-row">' +
+            '<span>Syncing ' + esc(freq) + '</span>' +
+            '<button class="btn btn-ghost" style="font-size:0.75rem" onclick="doSyncGitLabNow(\'' + esc(id) + '\')">Sync now</button>' +
+        '</div>' +
+        '<button class="btn btn-outline" style="font-size:0.75rem;margin-top:0.4rem" onclick="doDisableGitLabSync(\'' + esc(id) + '\')">Disable</button>' +
+        errHtml;
+}
+
+function doEnableGitLabSync(id) {
+    var freq = document.getElementById('gl-freq-' + id).value;
+    fetch('/api/project-gitlab-sync', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({repo_id: id, enabled: true, frequency: freq})
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
+        toast('GitLab sync enabled', 'ok');
+        loadReleases();
+    }).catch(function(err) { toast('Error: ' + err, 'err'); });
+}
+
+function doDisableGitLabSync(id) {
+    fetch('/api/project-gitlab-sync', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({repo_id: id, enabled: false})
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
+        toast('GitLab sync disabled', 'ok');
+        loadReleases();
+    }).catch(function(err) { toast('Error: ' + err, 'err'); });
+}
+
+function doSyncGitLabNow(id) {
+    fetch('/api/project-gitlab-sync/sync-now?repo_id=' + encodeURIComponent(id), {method: 'POST'})
+        .then(function(r) {
+            if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
+            toast('Sync queued', 'inf');
+            setTimeout(function() { loadReleases(); }, 2000);
+        }).catch(function(err) { toast('Error: ' + err, 'err'); });
 }
 
 function doTogglePush(checkbox, id) {
