@@ -1010,7 +1010,8 @@ func (s *Store) RemoveUserRepo(userID, repoID string) bool {
 func (s *Store) GetUserRepos(userID string) []Project {
 	rows, err := s.db.Query(`
 		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled,
-		       ur.gitlab_sync_enabled, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error
+		       ur.gitlab_sync_enabled, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error,
+		       ur.gitlab_project_path
 		FROM repos r
 		INNER JOIN user_repos ur ON ur.repo_id = r.id
 		WHERE ur.user_id = ?
@@ -1026,7 +1027,8 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		var lastRefresh, lastGitLabSync string
 		var pushEnabled, gitlabSyncEnabled int
 		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled,
-			&gitlabSyncEnabled, &p.GitLabSyncFrequency, &lastGitLabSync, &p.LastGitLabSyncError); err != nil {
+			&gitlabSyncEnabled, &p.GitLabSyncFrequency, &lastGitLabSync, &p.LastGitLabSyncError,
+			&p.GitLabProjectPath); err != nil {
 			log.Printf("⚠ Failed to scan project: %v", err)
 			continue
 		}

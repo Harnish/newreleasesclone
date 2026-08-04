@@ -41,6 +41,7 @@ type Project struct {
 	GitLabSyncFrequency string    `json:"gitlab_sync_frequency,omitempty"`
 	LastGitLabSyncAt    time.Time `json:"last_gitlab_sync_at,omitempty"`
 	LastGitLabSyncError string    `json:"last_gitlab_sync_error,omitempty"`
+	GitLabProjectPath   string    `json:"gitlab_project_path,omitempty"`
 }
 
 type GitLabSettings struct {

@@ -1283,12 +1283,16 @@ function buildProjectsHTML(projects) {
     }
     return projects.map(function(p) {
         var sub = p.last_refresh ? 'Refreshed ' + fmtAge(p.last_refresh) : 'Never refreshed';
+        var backupUrl = p.gitlab_project_path ? p.gitlab_project_path.replace(/\.git$/, '') : '';
+        var backupLink = (p.gitlab_sync_enabled && /^https?:\/\//i.test(backupUrl)) ?
+            '<a href="' + esc(backupUrl) + '" target="_blank" rel="noopener noreferrer" class="badge">[BACKUP]</a>' : '';
         return '<div class="card" id="projcard-' + esc(p.id) + '">' +
             '<div class="proj-row">' +
                 '<div class="proj-card-info">' +
                     '<div class="proj-card-name">' + esc(p.name) + '</div>' +
                     '<div class="proj-card-meta">' +
                         '<span class="badge ' + esc(p.platform) + '">' + esc(p.platform) + '</span>' +
+                        backupLink +
                         '<span style="color:#64748b;font-size:0.75rem">' + sub + '</span>' +
                     '</div>' +
                     '<div class="proj-card-sub">' + esc(p.repo_url) + '</div>' +
