@@ -38,6 +38,13 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+          # Uncomment and set to your own GitLab hostname(s) if your GitLab
+          # instance resolves to a private/cluster-internal address from
+          # here (split-horizon DNS or a k8s service name) — see README's
+          # Environment Variables section.
+          # env:
+          #   - name: GITLAB_ALLOWED_HOSTS
+          #     value: "gitlab.whiskeyonthe.rocks"
           volumeMounts:
             - name: data
               mountPath: /app/data

@@ -154,6 +154,64 @@ func TestGitLabClientRefusesToDialDisallowedIP(t *testing.T) {
 	}
 }
 
+// withAllowedHostForTests swaps gitLabAllowedHosts to trust exactly host,
+// scoped to this test via t.Cleanup. Mirrors withLoopbackAllowedForTests's
+// atomic-swap pattern so concurrent dial-time reads stay race-free.
+func withAllowedHostForTests(t *testing.T, host string) {
+	t.Helper()
+	old := gitLabAllowedHosts.Load()
+	m := map[string]bool{strings.ToLower(host): true}
+	gitLabAllowedHosts.Store(&m)
+	t.Cleanup(func() { gitLabAllowedHosts.Store(old) })
+}
+
+func TestParseAllowedHosts(t *testing.T) {
+	got := parseAllowedHosts(" Gitlab.Example.com , other.host ,, ")
+	want := map[string]bool{"gitlab.example.com": true, "other.host": true}
+	if len(got) != len(want) {
+		t.Fatalf("parseAllowedHosts() = %v, want %v", got, want)
+	}
+	for h := range want {
+		if !got[h] {
+			t.Errorf("parseAllowedHosts() missing %q", h)
+		}
+	}
+}
+
+func TestParseAllowedHostsEmpty(t *testing.T) {
+	got := parseAllowedHosts("")
+	if len(got) != 0 {
+		t.Errorf("parseAllowedHosts(\"\") = %v, want empty", got)
+	}
+}
+
+// TestValidateGitLabURLAllowsAllowlistedHost proves an operator-allowlisted
+// hostname bypasses the IP-based rejection even when it resolves to a
+// disallowed address (localhost -> 127.0.0.1) — the split-horizon-DNS /
+// same-cluster-service-name case this allowlist exists for.
+func TestValidateGitLabURLAllowsAllowlistedHost(t *testing.T) {
+	withAllowedHostForTests(t, "localhost")
+	if err := validateGitLabURL("http://localhost"); err != nil {
+		t.Errorf("validateGitLabURL(localhost) with host allowlisted = %v, want nil", err)
+	}
+}
+
+// TestGitLabAllowedHostsBypassesDialGuard proves the allowlist is also
+// consulted at dial time (not just registration) — the actual security
+// boundary. If it works, dialing localhost:1 (nothing listening) fails on
+// connection-refused, NOT on our "disallowed address" rejection.
+func TestGitLabAllowedHostsBypassesDialGuard(t *testing.T) {
+	withAllowedHostForTests(t, "localhost")
+	c := newGitLabClient("http://localhost:1", "tok")
+	_, err := c.ProjectExists("whatever")
+	if err == nil {
+		t.Fatal("ProjectExists() against a closed port = nil error, want a connection error")
+	}
+	if strings.Contains(err.Error(), "disallowed") {
+		t.Errorf("error = %v, want the allowlisted host to bypass the dial guard entirely", err)
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"My Repo", "my-repo"},

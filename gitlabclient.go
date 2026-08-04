@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -20,6 +22,46 @@ import (
 // atomic because dial Control callbacks can run on a background goroutine
 // concurrently with test cleanup.
 var allowLoopbackInTests atomic.Bool
+
+// gitLabAllowedHosts holds an operator-configured set of hostnames (from
+// GITLAB_ALLOWED_HOSTS, comma-separated) that bypass the disallowed-address
+// checks entirely, both at registration (validateGitLabURL) and at dial
+// time. This exists because a self-hosted GitLab instance — the exact use
+// case this feature targets — commonly resolves to a private address via
+// split-horizon DNS or a Kubernetes service name when reached from inside
+// the same cluster/network as newreleases, which the general per-user SSRF
+// guard must otherwise reject (it can't distinguish "attacker-supplied
+// internal target" from "operator's own instance" from IP alone). This is
+// deliberately operator-controlled (an env var set by whoever deploys
+// newreleases), not something a newreleases *user* can set via the API —
+// that would just reopen the SSRF hole for a multi-tenant deployment.
+// An atomic.Pointer swap (not a mutable map) so concurrent dial-time reads
+// from background sync goroutines are race-free even while tests swap it.
+var gitLabAllowedHosts atomic.Pointer[map[string]bool]
+
+func init() {
+	m := parseAllowedHosts(os.Getenv("GITLAB_ALLOWED_HOSTS"))
+	gitLabAllowedHosts.Store(&m)
+}
+
+func parseAllowedHosts(raw string) map[string]bool {
+	set := map[string]bool{}
+	for _, h := range strings.Split(raw, ",") {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h != "" {
+			set[h] = true
+		}
+	}
+	return set
+}
+
+func isAllowedHost(host string) bool {
+	m := gitLabAllowedHosts.Load()
+	if m == nil {
+		return false
+	}
+	return (*m)[strings.ToLower(host)]
+}
 
 // GitLabClient is a minimal GitLab REST v4 client, ported from
 // /home/jharnish/Work/syncrepos/syncrepos/internal/gitlab/client.go.
@@ -186,32 +228,53 @@ func isDisallowedIP(ip net.IP) bool {
 	return false
 }
 
-// gitLabHTTPTransport is shared by every GitLabClient. Its dialer
-// re-validates the resolved IP on every connection, not just once at
-// registration — closing a DNS-rebinding/TOCTOU gap that a
+// gitLabGuardedDialer re-validates the resolved IP on every connection, not
+// just once at registration — closing a DNS-rebinding/TOCTOU gap that a
 // registration-time-only check (validateGitLabURL) leaves open: a
 // user-controlled hostname can resolve to a public IP when saved and to an
 // internal one by the time a sync actually connects, arbitrarily later.
 // net.Dialer.Control runs after DNS resolution but before the connect()
 // syscall, so it sees the real destination IP for every request.
+var gitLabGuardedDialer = &net.Dialer{
+	Timeout: 10 * time.Second,
+	Control: func(network, address string, c syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+		ip := net.ParseIP(host)
+		if ip == nil {
+			return fmt.Errorf("refusing to dial non-IP address %q", host)
+		}
+		if isDisallowedIP(ip) && !(ip.IsLoopback() && allowLoopbackInTests.Load()) {
+			return fmt.Errorf("refusing to dial disallowed address %s", ip)
+		}
+		return nil
+	},
+}
+
+// gitLabUnguardedDialer is used only for hostnames in gitLabAllowedHosts —
+// the operator has already vouched for the destination, so no IP-range
+// check applies (that's the whole point of the allowlist: it needs to
+// permit private addresses).
+var gitLabUnguardedDialer = &net.Dialer{Timeout: 10 * time.Second}
+
+// gitLabHTTPTransport is shared by every GitLabClient. Its DialContext
+// checks the allowlist against the pre-resolution hostname (Control, on the
+// dialer itself, only ever sees the post-resolution IP — too late to know
+// which hostname it came from) and picks the guarded or unguarded dialer
+// accordingly.
 var gitLabHTTPTransport = &http.Transport{
-	DialContext: (&net.Dialer{
-		Timeout: 10 * time.Second,
-		Control: func(network, address string, c syscall.RawConn) error {
-			host, _, err := net.SplitHostPort(address)
-			if err != nil {
-				return err
-			}
-			ip := net.ParseIP(host)
-			if ip == nil {
-				return fmt.Errorf("refusing to dial non-IP address %q", host)
-			}
-			if isDisallowedIP(ip) && !(ip.IsLoopback() && allowLoopbackInTests.Load()) {
-				return fmt.Errorf("refusing to dial disallowed address %s", ip)
-			}
-			return nil
-		},
-	}).DialContext,
+	DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			host = addr
+		}
+		if isAllowedHost(host) {
+			return gitLabUnguardedDialer.DialContext(ctx, network, addr)
+		}
+		return gitLabGuardedDialer.DialContext(ctx, network, addr)
+	},
 }
 
 // validateGitLabURL rejects URLs that don't resolve to a public address at
@@ -234,6 +297,9 @@ func validateGitLabURL(rawURL string) error {
 	host := u.Hostname()
 	if host == "" {
 		return fmt.Errorf("gitlab_url must include a host")
+	}
+	if isAllowedHost(host) {
+		return nil
 	}
 	ips, err := net.LookupIP(host)
 	if err != nil {
