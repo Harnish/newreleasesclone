@@ -28,6 +28,7 @@ func main() {
 	if smtpEnabled {
 		go runDailyDigest()
 	}
+	go runGitLabSyncScheduler()
 
 	http.HandleFunc("/", handleHome)
 	http.HandleFunc("/sw.js", handleServiceWorker)
@@ -47,6 +48,10 @@ func main() {
 	http.HandleFunc("/api/account-settings", requireAuth(handleAccountSettings))
 	http.HandleFunc("/api/push/vapid-key", requireAuth(handlePushVapidKey))
 	http.HandleFunc("/api/push/subscribe", requireAuth(handlePushSubscribe))
+	http.HandleFunc("/api/gitlab-settings", requireAuth(handleGitLabSettings))
+	http.HandleFunc("/api/gitlab-settings/awesome", requireAuth(handleGitLabAwesome))
+	http.HandleFunc("/api/project-gitlab-sync", requireAuth(handleProjectGitLabSync))
+	http.HandleFunc("/api/project-gitlab-sync/sync-now", requireAuth(handleProjectGitLabSyncNow))
 
 	fmt.Println("Release Tracker running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

@@ -12,7 +12,8 @@ import (
 )
 
 func TestDoSyncProjectToGitLabRequiresConfig(t *testing.T) {
-	err := doSyncProjectToGitLab(GitLabSyncTarget{RepoURL: "https://github.com/o/r"})
+	s := newTestStore(t)
+	err := s.doSyncProjectToGitLab(GitLabSyncTarget{RepoURL: "https://github.com/o/r"})
 	if err == nil {
 		t.Error("doSyncProjectToGitLab() error = nil, want error when gitlab url/token are empty")
 	}
@@ -62,7 +63,7 @@ func TestDoSyncProjectToGitLabCreatesAndPushes(t *testing.T) {
 		GitLabURL:   srv.URL,
 		GitLabToken: "tok",
 	}
-	if err := doSyncProjectToGitLab(target); err != nil {
+	if err := s.doSyncProjectToGitLab(target); err != nil {
 		t.Fatalf("doSyncProjectToGitLab() error = %v", err)
 	}
 
@@ -84,7 +85,7 @@ func TestSyncProjectToGitLabRecordsOutcome(t *testing.T) {
 	s.SetProjectGitLabSync(userID, repoID, true, "daily")
 
 	target := GitLabSyncTarget{UserID: userID, RepoID: repoID, RepoURL: "https://github.com/o/r"}
-	syncProjectToGitLab(target)
+	s.syncProjectToGitLab(target)
 
 	projects := s.GetUserRepos(userID)
 	if projects[0].LastGitLabSyncError == "" {

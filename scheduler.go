@@ -85,7 +85,7 @@ func runGitLabSyncScheduler() {
 func checkDueGitLabSyncs() {
 	for _, t := range store.GetAllEnabledGitLabSyncTargets() {
 		if gitlabSyncDue(t.LastSyncAt, t.Frequency) {
-			go syncProjectToGitLab(t)
+			go store.syncProjectToGitLab(t)
 		}
 	}
 }

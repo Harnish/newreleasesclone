@@ -339,6 +339,154 @@ func handleWebhooks(w http.ResponseWriter, r *http.Request, userID string) {
 	}
 }
 
+// GET /api/gitlab-settings — returns the user's GitLab instance config (token omitted).
+// POST /api/gitlab-settings — saves gitlab_url + gitlab_token.
+func handleGitLabSettings(w http.ResponseWriter, r *http.Request, userID string) {
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case http.MethodGet:
+		settings, err := store.GetGitLabSettings(userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"gitlab_url":          settings.GitLabURL,
+			"has_token":           settings.GitLabToken != "",
+			"awesome_enabled":     settings.AwesomeEnabled,
+			"awesome_repo_name":   settings.AwesomeRepoName,
+			"awesome_gitlab_path": settings.AwesomeGitLabPath,
+		})
+
+	case http.MethodPost:
+		var req struct {
+			GitLabURL   string `json:"gitlab_url"`
+			GitLabToken string `json:"gitlab_token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.GitLabURL == "" || req.GitLabToken == "" {
+			http.Error(w, "gitlab_url and gitlab_token are required", http.StatusBadRequest)
+			return
+		}
+		if !strings.HasPrefix(req.GitLabURL, "http://") && !strings.HasPrefix(req.GitLabURL, "https://") {
+			http.Error(w, "gitlab_url must start with http:// or https://", http.StatusBadRequest)
+			return
+		}
+		if err := store.SaveGitLabSettings(userID, req.GitLabURL, req.GitLabToken); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// POST /api/gitlab-settings/awesome — enable/disable the Awesome page and set its repo name.
+func handleGitLabAwesome(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Enabled  bool   `json:"enabled"`
+		RepoName string `json:"repo_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Enabled && req.RepoName == "" {
+		http.Error(w, "repo_name is required to enable the awesome page", http.StatusBadRequest)
+		return
+	}
+	if err := store.SetAwesomeConfig(userID, req.RepoName, req.Enabled); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if req.Enabled {
+		if err := store.syncAwesomePage(userID); err != nil {
+			json.NewEncoder(w).Encode(map[string]string{"status": "saved", "warning": err.Error()})
+			return
+		}
+	}
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// POST /api/project-gitlab-sync — enable/disable GitLab mirror sync for a project and set its frequency.
+func handleProjectGitLabSync(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		RepoID    string `json:"repo_id"`
+		Enabled   bool   `json:"enabled"`
+		Frequency string `json:"frequency"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RepoID == "" {
+		http.Error(w, "repo_id is required", http.StatusBadRequest)
+		return
+	}
+	if req.Enabled {
+		if req.Frequency != "daily" && req.Frequency != "weekly" && req.Frequency != "monthly" {
+			http.Error(w, "frequency must be daily, weekly, or monthly", http.StatusBadRequest)
+			return
+		}
+		settings, err := store.GetGitLabSettings(userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if settings.GitLabToken == "" {
+			http.Error(w, "configure your GitLab instance in Account Settings first", http.StatusBadRequest)
+			return
+		}
+	}
+	ok, err := store.SetProjectGitLabSync(userID, req.RepoID, req.Enabled, req.Frequency)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !ok {
+		http.Error(w, "project not found", http.StatusNotFound)
+		return
+	}
+	if req.Enabled {
+		for _, t := range store.GetUserGitLabSyncTargets(userID) {
+			if t.RepoID == req.RepoID {
+				go store.syncProjectToGitLab(t)
+				break
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// POST /api/project-gitlab-sync/sync-now — manually trigger a sync for an already-enabled project.
+func handleProjectGitLabSyncNow(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	repoID := r.URL.Query().Get("repo_id")
+	if repoID == "" {
+		http.Error(w, "missing repo_id", http.StatusBadRequest)
+		return
+	}
+	for _, t := range store.GetUserGitLabSyncTargets(userID) {
+		if t.RepoID == repoID {
+			go store.syncProjectToGitLab(t)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"status": "queued"})
+			return
+		}
+	}
+	http.Error(w, "project not found or gitlab sync not enabled", http.StatusNotFound)
+}
+
 // GET /api/push/vapid-key — returns the VAPID public key for subscription setup.
 func handlePushVapidKey(w http.ResponseWriter, r *http.Request, userID string) {
 	w.Header().Set("Content-Type", "application/json")

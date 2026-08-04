@@ -44,7 +44,7 @@ func TestSyncAwesomePageNoOpWhenDisabled(t *testing.T) {
 	defer func() { store = oldStore }()
 
 	userID, _ := newTestAuth(t, s)
-	if err := syncAwesomePage(userID); err != nil {
+	if err := s.syncAwesomePage(userID); err != nil {
 		t.Fatalf("syncAwesomePage() with no gitlab_settings row = %v, want nil (no-op)", err)
 	}
 }
@@ -77,7 +77,7 @@ func TestSyncAwesomePageCreatesAndPushes(t *testing.T) {
 	s.SetAwesomeConfig(userID, "my-awesome", true)
 	s.SetProjectGitLabSync(userID, repoID, true, "daily")
 
-	if err := syncAwesomePage(userID); err != nil {
+	if err := s.syncAwesomePage(userID); err != nil {
 		t.Fatalf("syncAwesomePage() error = %v", err)
 	}
 

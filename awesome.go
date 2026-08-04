@@ -41,9 +41,11 @@ func buildAwesomeReadme(targets []GitLabSyncTarget) string {
 }
 
 // syncAwesomePage regenerates and pushes the Awesome README for userID. A
-// no-op returning nil if the user hasn't enabled the feature.
-func syncAwesomePage(userID string) error {
-	settings, err := store.GetGitLabSettings(userID)
+// no-op returning nil if the user hasn't enabled the feature. A method (not
+// a free function reading the global store) for the same reason as
+// (*Store).syncProjectToGitLab — see that doc comment.
+func (s *Store) syncAwesomePage(userID string) error {
+	settings, err := s.GetGitLabSettings(userID)
 	if err != nil {
 		return err
 	}
@@ -70,7 +72,7 @@ func syncAwesomePage(userID string) error {
 		if err != nil {
 			return fmt.Errorf("create/get awesome project: %w", err)
 		}
-		if err := store.SetAwesomeGitLabPath(userID, httpURL); err != nil {
+		if err := s.SetAwesomeGitLabPath(userID, httpURL); err != nil {
 			return fmt.Errorf("save awesome project path: %w", err)
 		}
 	}
@@ -79,7 +81,7 @@ func syncAwesomePage(userID string) error {
 	if err != nil {
 		return err
 	}
-	targets := store.GetUserGitLabSyncTargets(userID)
+	targets := s.GetUserGitLabSyncTargets(userID)
 	content := buildAwesomeReadme(targets)
 	return pushGeneratedContent(pushURL, map[string]string{"README.md": content})
 }
