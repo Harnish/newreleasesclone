@@ -17,6 +17,11 @@ func syncProjectToGitLab(t GitLabSyncTarget) {
 	if recErr := store.RecordGitLabSync(t.UserID, t.RepoID, err); recErr != nil {
 		log.Printf("⚠ failed to record gitlab sync outcome for user=%s repo=%s: %v", t.UserID, t.RepoID, recErr)
 	}
+	if err == nil {
+		if awErr := syncAwesomePage(t.UserID); awErr != nil {
+			log.Printf("⚠ awesome page sync failed for user=%s: %v", t.UserID, awErr)
+		}
+	}
 }
 
 // doSyncProjectToGitLab ensures the mirror project exists under the user's
