@@ -102,7 +102,7 @@ func TestHandleProjectGitLabSyncEnable(t *testing.T) {
 	defer func() { store = oldStore }()
 	userID, cookie := newTestAuth(t, s)
 	repoID, _ := s.AddRepo(userID, Project{Name: "repo", Platform: "github", RepoURL: "https://github.com/o/r"})
-	s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok")
+	s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok", "")
 
 	body, _ := json.Marshal(map[string]any{"repo_id": repoID, "enabled": true, "frequency": "weekly"})
 	req := httptest.NewRequest(http.MethodPost, "/api/project-gitlab-sync", bytes.NewReader(body))

@@ -17,7 +17,7 @@ func TestSaveAndGetGitLabSettings(t *testing.T) {
 		t.Errorf("expected zero-value settings for unconfigured user, got %+v", got)
 	}
 
-	if err := s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok123"); err != nil {
+	if err := s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok123", ""); err != nil {
 		t.Fatalf("SaveGitLabSettings: %v", err)
 	}
 	got, err = s.GetGitLabSettings(userID)
@@ -29,7 +29,7 @@ func TestSaveAndGetGitLabSettings(t *testing.T) {
 	}
 
 	// Save again should update, not duplicate.
-	if err := s.SaveGitLabSettings(userID, "https://gitlab2.example.com", "tok456"); err != nil {
+	if err := s.SaveGitLabSettings(userID, "https://gitlab2.example.com", "tok456", ""); err != nil {
 		t.Fatalf("SaveGitLabSettings update: %v", err)
 	}
 	got, _ = s.GetGitLabSettings(userID)
@@ -46,7 +46,7 @@ func TestSetAwesomeConfigRequiresGitLabSettings(t *testing.T) {
 		t.Error("SetAwesomeConfig should error when no gitlab_settings row exists yet")
 	}
 
-	s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok")
+	s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok", "")
 	if err := s.SetAwesomeConfig(userID, "my-awesome", true); err != nil {
 		t.Fatalf("SetAwesomeConfig after configuring gitlab: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestRecordGitLabSyncAndTargets(t *testing.T) {
 	s := newTestStore(t)
 	userID, _ := newTestAuth(t, s)
 	repoID, _ := s.AddRepo(userID, Project{Name: "repo", Platform: "github", RepoURL: "https://github.com/o/r"})
-	s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok")
+	s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok", "")
 	s.SetProjectGitLabSync(userID, repoID, true, "daily")
 
 	targets := s.GetAllEnabledGitLabSyncTargets()

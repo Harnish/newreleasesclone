@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -66,6 +67,92 @@ func TestDoSyncProjectToGitLabCreatesAndPushes(t *testing.T) {
 	}
 	if err := s.doSyncProjectToGitLab(target); err != nil {
 		t.Fatalf("doSyncProjectToGitLab() error = %v", err)
+	}
+
+	out := runGitCmdOutput(t, bareDir, "log", "--oneline")
+	if out == "" {
+		t.Error("mirror target has no commits after sync")
+	}
+}
+
+func TestDoSyncProjectToGitLabWithGroupNamespacesByOwner(t *testing.T) {
+	withLoopbackAllowedForTests(t)
+	s := newTestStore(t)
+	oldStore := store
+	store = s
+	defer func() { store = oldStore }()
+	userID, _ := newTestAuth(t, s)
+	repoID, _ := s.AddRepo(userID, Project{Name: "ebook2audiobook", Platform: "github", RepoURL: "https://github.com/DrewThomasson/ebook2audiobook"})
+
+	originDir := t.TempDir()
+	runGitCmd(t, originDir, "init", "-b", "main")
+	runGitCmd(t, originDir, "config", "user.email", "test@example.com")
+	runGitCmd(t, originDir, "config", "user.name", "Test")
+	os.WriteFile(filepath.Join(originDir, "f.txt"), []byte("hi"), 0o644)
+	runGitCmd(t, originDir, "add", "f.txt")
+	runGitCmd(t, originDir, "commit", "-m", "init")
+	originURL := "file://" + originDir
+	// RepoURL doubles as both the mirror-clone source and the owner-extraction
+	// source (as it does in production, where it's the same github.com URL for
+	// both) — its first path segment is always "tmp" for a t.TempDir() origin.
+	wantOwner, err := repoOwner(originURL)
+	if err != nil {
+		t.Fatalf("repoOwner(%q) error = %v", originURL, err)
+	}
+
+	bareDir := t.TempDir()
+	runGitCmd(t, bareDir, "init", "--bare", "-b", "main")
+	bareURL := "file://" + bareDir
+
+	subgroupPath := "UpStream/" + wantOwner
+	fullProjectPath := subgroupPath + "/ebook2audiobook"
+
+	mux := http.NewServeMux()
+	// subgroup "UpStream/<owner>" doesn't exist yet ...
+	mux.HandleFunc("/api/v4/groups/"+url.PathEscape(subgroupPath), func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	// ... but the top-level "UpStream" group does.
+	mux.HandleFunc("/api/v4/groups/UpStream", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"id": 5})
+	})
+	var subgroupBody map[string]any
+	mux.HandleFunc("/api/v4/groups", func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&subgroupBody)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"id": 42})
+	})
+	mux.HandleFunc("/api/v4/projects/"+url.PathEscape(fullProjectPath), func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	var projectBody map[string]any
+	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&projectBody)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"http_url_to_repo": bareURL})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	target := GitLabSyncTarget{
+		UserID:      userID,
+		RepoID:      repoID,
+		RepoName:    "ebook2audiobook",
+		RepoURL:     originURL,
+		Platform:    "github",
+		GitLabURL:   srv.URL,
+		GitLabToken: "tok",
+		GitLabGroup: "UpStream",
+	}
+	if err := s.doSyncProjectToGitLab(target); err != nil {
+		t.Fatalf("doSyncProjectToGitLab() error = %v", err)
+	}
+
+	if subgroupBody["name"] != wantOwner || subgroupBody["parent_id"] != float64(5) {
+		t.Errorf("subgroup create body = %+v, want name=%s parent_id=5", subgroupBody, wantOwner)
+	}
+	if projectBody["name"] != "ebook2audiobook" || projectBody["namespace_id"] != float64(42) {
+		t.Errorf("project create body = %+v, want name=ebook2audiobook namespace_id=42", projectBody)
 	}
 
 	out := runGitCmdOutput(t, bareDir, "log", "--oneline")

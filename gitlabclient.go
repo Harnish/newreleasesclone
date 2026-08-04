@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -65,11 +66,8 @@ func isAllowedHost(host string) bool {
 
 // GitLabClient is a minimal GitLab REST v4 client, ported from
 // /home/jharnish/Work/syncrepos/syncrepos/internal/gitlab/client.go.
-// ponytail: dropped GroupExists/EnsureGroupPath/SetToken/HasToken from the
-// original — newreleases creates each mirror project directly under the
-// token owner's personal GitLab namespace (namespace_id omitted from
-// CreateProject), so subgroup management isn't needed, and a fresh client
-// is constructed per sync rather than reused with a live-swappable token.
+// ponytail: dropped SetToken/HasToken from the original — a fresh client is
+// constructed per sync rather than reused with a live-swappable token.
 type GitLabClient struct {
 	baseURL string
 	token   string
@@ -123,14 +121,17 @@ func (c *GitLabClient) GetProjectHTTPURL(fullPath string) (string, error) {
 	return body.HTTPURLToRepo, nil
 }
 
-// CreateProject creates a private project named name directly under the
-// token owner's personal GitLab namespace (namespace_id omitted — GitLab
-// defaults to the authenticated user's own namespace).
-func (c *GitLabClient) CreateProject(name string) (httpURLToRepo string, err error) {
+// CreateProject creates a private project named name. If namespaceID is 0,
+// GitLab defaults to the token owner's personal namespace; otherwise the
+// project is created under that group/subgroup.
+func (c *GitLabClient) CreateProject(namespaceID int, name string) (httpURLToRepo string, err error) {
 	reqBody := map[string]any{
 		"name":       name,
 		"path":       name,
 		"visibility": "private",
+	}
+	if namespaceID != 0 {
+		reqBody["namespace_id"] = namespaceID
 	}
 	var body struct {
 		HTTPURLToRepo string `json:"http_url_to_repo"`
@@ -143,6 +144,64 @@ func (c *GitLabClient) CreateProject(name string) (httpURLToRepo string, err err
 		return "", fmt.Errorf("gitlab: create project %s failed, status %d", name, status)
 	}
 	return body.HTTPURLToRepo, nil
+}
+
+// GroupExists looks up a group (or nested subgroup, e.g. "upstream/owner")
+// by its full path.
+func (c *GitLabClient) GroupExists(fullPath string) (id int, exists bool, err error) {
+	var body struct {
+		ID int `json:"id"`
+	}
+	status, err := c.do(http.MethodGet, "/groups/"+url.PathEscape(fullPath), nil, &body)
+	if err != nil {
+		return 0, false, err
+	}
+	if status == http.StatusNotFound {
+		return 0, false, nil
+	}
+	if status != http.StatusOK {
+		return 0, false, fmt.Errorf("gitlab: unexpected status %d checking group %s", status, fullPath)
+	}
+	return body.ID, true, nil
+}
+
+// EnsureGroupPath returns the id of the group at fullPath, creating any
+// missing subgroups beneath the top-level segment. The top-level segment
+// (the operator-configured "upstream group") must already exist in GitLab —
+// newreleases only creates subgroups beneath it, never a new top-level group.
+func (c *GitLabClient) EnsureGroupPath(fullPath string) (int, error) {
+	if id, exists, err := c.GroupExists(fullPath); err != nil {
+		return 0, err
+	} else if exists {
+		return id, nil
+	}
+
+	parent := path.Dir(fullPath)
+	name := path.Base(fullPath)
+	if parent == "." || parent == fullPath {
+		return 0, fmt.Errorf("gitlab: top-level group %q does not exist; create it manually first", fullPath)
+	}
+
+	parentID, err := c.EnsureGroupPath(parent)
+	if err != nil {
+		return 0, err
+	}
+	return c.createSubgroup(parentID, name)
+}
+
+func (c *GitLabClient) createSubgroup(parentID int, name string) (int, error) {
+	reqBody := map[string]any{"name": name, "path": name, "parent_id": parentID}
+	var body struct {
+		ID int `json:"id"`
+	}
+	status, err := c.do(http.MethodPost, "/groups", reqBody, &body)
+	if err != nil {
+		return 0, err
+	}
+	if status != http.StatusCreated {
+		return 0, fmt.Errorf("gitlab: create subgroup %s failed, status %d", name, status)
+	}
+	return body.ID, nil
 }
 
 // AuthenticatedPushURL embeds the client's token in a project's
@@ -311,6 +370,22 @@ func validateGitLabURL(rawURL string) error {
 		}
 	}
 	return nil
+}
+
+// repoOwner extracts the account/org segment from a repo URL, e.g.
+// "https://github.com/DrewThomasson/ebook2audiobook" -> "DrewThomasson".
+// Used to namespace mirror projects as <group>/<owner>/<repo> so mirrors
+// from different upstream accounts don't collide on repo name alone.
+func repoOwner(repoURL string) (string, error) {
+	u, err := url.Parse(repoURL)
+	if err != nil {
+		return "", fmt.Errorf("parse repo url %q: %w", repoURL, err)
+	}
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(segs) == 0 || segs[0] == "" {
+		return "", fmt.Errorf("repo url %q has no owner segment", repoURL)
+	}
+	return segs[0], nil
 }
 
 // slugify lowercases name and collapses runs of non-alphanumeric characters

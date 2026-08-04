@@ -353,6 +353,7 @@ func handleGitLabSettings(w http.ResponseWriter, r *http.Request, userID string)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"gitlab_url":          settings.GitLabURL,
 			"has_token":           settings.GitLabToken != "",
+			"gitlab_group":        settings.GitLabGroup,
 			"awesome_enabled":     settings.AwesomeEnabled,
 			"awesome_repo_name":   settings.AwesomeRepoName,
 			"awesome_gitlab_path": settings.AwesomeGitLabPath,
@@ -362,6 +363,7 @@ func handleGitLabSettings(w http.ResponseWriter, r *http.Request, userID string)
 		var req struct {
 			GitLabURL   string `json:"gitlab_url"`
 			GitLabToken string `json:"gitlab_token"`
+			GitLabGroup string `json:"gitlab_group"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.GitLabURL == "" || req.GitLabToken == "" {
 			http.Error(w, "gitlab_url and gitlab_token are required", http.StatusBadRequest)
@@ -371,7 +373,8 @@ func handleGitLabSettings(w http.ResponseWriter, r *http.Request, userID string)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := store.SaveGitLabSettings(userID, req.GitLabURL, req.GitLabToken); err != nil {
+		req.GitLabGroup = strings.Trim(strings.TrimSpace(req.GitLabGroup), "/")
+		if err := store.SaveGitLabSettings(userID, req.GitLabURL, req.GitLabToken, req.GitLabGroup); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

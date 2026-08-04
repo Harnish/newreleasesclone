@@ -74,7 +74,7 @@ func TestSyncAwesomePageCreatesAndPushes(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	s.SaveGitLabSettings(userID, srv.URL, "tok")
+	s.SaveGitLabSettings(userID, srv.URL, "tok", "")
 	s.SetAwesomeConfig(userID, "my-awesome", true)
 	s.SetProjectGitLabSync(userID, repoID, true, "daily")
 

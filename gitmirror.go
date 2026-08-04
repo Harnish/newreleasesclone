@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -24,12 +25,15 @@ func mirrorSyncRepo(remoteURL, pushURL string) error {
 	}
 	defer os.RemoveAll(dir)
 
+	log.Printf("gitlab sync: cloning mirror src=%s", remoteURL)
 	if err := gitRun("", "clone", "--mirror", "--", remoteURL, dir); err != nil {
 		return err
 	}
+	log.Printf("gitlab sync: pushing mirror dst=%s", redactArgs([]string{pushURL}))
 	if err := gitRun(dir, "push", "--mirror", "--", pushURL); err != nil {
 		return err
 	}
+	log.Printf("gitlab sync: push complete dst=%s", redactArgs([]string{pushURL}))
 	return nil
 }
 

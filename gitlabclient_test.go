@@ -51,7 +51,7 @@ func TestGitLabProjectExistsAndCreateProject(t *testing.T) {
 		t.Fatalf("ProjectExists() = (%v, %v), want (false, nil)", exists, err)
 	}
 
-	httpURL, err := c.CreateProject("new-repo")
+	httpURL, err := c.CreateProject(0, "new-repo")
 	if err != nil {
 		t.Fatalf("CreateProject() error = %v", err)
 	}

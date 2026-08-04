@@ -46,6 +46,7 @@ type Project struct {
 type GitLabSettings struct {
 	GitLabURL         string `json:"gitlab_url"`
 	GitLabToken       string `json:"-"`
+	GitLabGroup       string `json:"gitlab_group"`
 	AwesomeEnabled    bool   `json:"awesome_enabled"`
 	AwesomeRepoName   string `json:"awesome_repo_name"`
 	AwesomeGitLabPath string `json:"awesome_gitlab_path"`
@@ -59,6 +60,7 @@ type GitLabSyncTarget struct {
 	Platform          string
 	GitLabURL         string
 	GitLabToken       string
+	GitLabGroup       string
 	GitLabProjectPath string
 	Frequency         string
 	LastSyncAt        time.Time

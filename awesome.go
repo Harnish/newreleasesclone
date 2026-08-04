@@ -67,7 +67,7 @@ func (s *Store) syncAwesomePage(userID string) error {
 		if exists {
 			httpURL, err = client.GetProjectHTTPURL(path)
 		} else {
-			httpURL, err = client.CreateProject(path)
+			httpURL, err = client.CreateProject(0, path)
 		}
 		if err != nil {
 			return fmt.Errorf("create/get awesome project: %w", err)

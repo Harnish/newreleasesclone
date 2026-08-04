@@ -308,6 +308,15 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 12 {
+		if _, err := db.Exec(`ALTER TABLE gitlab_settings ADD COLUMN gitlab_group TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("failed to migrate to v12 (gitlab_group): %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 12"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -452,15 +461,16 @@ func (s *Store) SetProjectPushEnabled(userID, repoID string, enabled bool) (bool
 
 // ---- GitLab sync ----
 
-func (s *Store) SaveGitLabSettings(userID, gitlabURL, token string) error {
+func (s *Store) SaveGitLabSettings(userID, gitlabURL, token, group string) error {
 	_, err := s.db.Exec(`
-		INSERT INTO gitlab_settings (user_id, gitlab_url, gitlab_token, updated_at)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO gitlab_settings (user_id, gitlab_url, gitlab_token, gitlab_group, updated_at)
+		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(user_id) DO UPDATE SET
 			gitlab_url = excluded.gitlab_url,
 			gitlab_token = excluded.gitlab_token,
+			gitlab_group = excluded.gitlab_group,
 			updated_at = excluded.updated_at`,
-		userID, gitlabURL, token, time.Now().Format(time.RFC3339))
+		userID, gitlabURL, token, group, time.Now().Format(time.RFC3339))
 	return err
 }
 
@@ -468,9 +478,9 @@ func (s *Store) GetGitLabSettings(userID string) (GitLabSettings, error) {
 	var g GitLabSettings
 	var awesomeEnabled int
 	err := s.db.QueryRow(`
-		SELECT gitlab_url, gitlab_token, awesome_enabled, awesome_repo_name, awesome_gitlab_path
+		SELECT gitlab_url, gitlab_token, gitlab_group, awesome_enabled, awesome_repo_name, awesome_gitlab_path
 		FROM gitlab_settings WHERE user_id = ?`, userID,
-	).Scan(&g.GitLabURL, &g.GitLabToken, &awesomeEnabled, &g.AwesomeRepoName, &g.AwesomeGitLabPath)
+	).Scan(&g.GitLabURL, &g.GitLabToken, &g.GitLabGroup, &awesomeEnabled, &g.AwesomeRepoName, &g.AwesomeGitLabPath)
 	if err == sql.ErrNoRows {
 		return GitLabSettings{}, nil
 	}
@@ -571,7 +581,7 @@ func (s *Store) RecordGitLabSync(userID, repoID string, syncErr error) error {
 func (s *Store) GetAllEnabledGitLabSyncTargets() []GitLabSyncTarget {
 	rows, err := s.db.Query(`
 		SELECT ur.user_id, r.id, r.name, r.repo_url, r.platform,
-		       gs.gitlab_url, gs.gitlab_token,
+		       gs.gitlab_url, gs.gitlab_token, gs.gitlab_group,
 		       ur.gitlab_project_path, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at
 		FROM user_repos ur
 		INNER JOIN repos r ON r.id = ur.repo_id
@@ -588,7 +598,7 @@ func (s *Store) GetAllEnabledGitLabSyncTargets() []GitLabSyncTarget {
 func (s *Store) GetUserGitLabSyncTargets(userID string) []GitLabSyncTarget {
 	rows, err := s.db.Query(`
 		SELECT ur.user_id, r.id, r.name, r.repo_url, r.platform,
-		       gs.gitlab_url, gs.gitlab_token,
+		       gs.gitlab_url, gs.gitlab_token, gs.gitlab_group,
 		       ur.gitlab_project_path, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at
 		FROM user_repos ur
 		INNER JOIN repos r ON r.id = ur.repo_id
@@ -608,7 +618,7 @@ func scanGitLabSyncTargets(rows *sql.Rows) []GitLabSyncTarget {
 		var t GitLabSyncTarget
 		var lastSync string
 		if err := rows.Scan(&t.UserID, &t.RepoID, &t.RepoName, &t.RepoURL, &t.Platform,
-			&t.GitLabURL, &t.GitLabToken, &t.GitLabProjectPath, &t.Frequency, &lastSync); err != nil {
+			&t.GitLabURL, &t.GitLabToken, &t.GitLabGroup, &t.GitLabProjectPath, &t.Frequency, &lastSync); err != nil {
 			log.Printf("⚠ Failed to scan gitlab sync target: %v", err)
 			continue
 		}

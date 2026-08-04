@@ -861,6 +861,20 @@ function loadAccountPanel() {
             glTokenInput.style.cssText = 'width:100%;margin-bottom:0.4rem;box-sizing:border-box';
             glSection.appendChild(glTokenInput);
 
+            var glGroupInput = document.createElement('input');
+            glGroupInput.type = 'text';
+            glGroupInput.id = 'gitlab-group-input';
+            glGroupInput.placeholder = 'Upstream group (optional, e.g. UpStream)';
+            glGroupInput.value = gitlabSettings.gitlab_group || '';
+            glGroupInput.className = 'webhook-input';
+            glGroupInput.style.cssText = 'width:100%;margin-bottom:0.4rem;box-sizing:border-box';
+            glSection.appendChild(glGroupInput);
+
+            var glGroupHint = document.createElement('div');
+            glGroupHint.style.cssText = 'font-size:0.72rem;color:#64748b;margin:-0.2rem 0 0.4rem';
+            glGroupHint.textContent = 'Mirrors go to <group>/<upstream-owner>/<repo> instead of your personal namespace. The group must already exist in GitLab.';
+            glSection.appendChild(glGroupHint);
+
             var glSaveBtn = document.createElement('button');
             glSaveBtn.className = 'btn btn-primary';
             glSaveBtn.style.cssText = 'font-size:0.78rem';
@@ -920,11 +934,12 @@ function toggleEmailDigest(checkbox) {
 function saveGitLabSettings() {
     var url = document.getElementById('gitlab-url-input').value.trim();
     var token = document.getElementById('gitlab-token-input').value;
+    var group = document.getElementById('gitlab-group-input').value.trim();
     if (!url || !token) { toast('GitLab URL and token are required', 'err'); return; }
     fetch('/api/gitlab-settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({gitlab_url: url, gitlab_token: token})
+        body: JSON.stringify({gitlab_url: url, gitlab_token: token, gitlab_group: group})
     }).then(function(r) {
         if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
         toast('GitLab settings saved', 'ok');
