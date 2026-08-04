@@ -25,8 +25,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o newreleases .
 # Final stage
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS
-RUN apk --no-cache add ca-certificates
+# ca-certificates for HTTPS; git for GitLab mirror sync (ephemeral clone/push)
+RUN apk --no-cache add ca-certificates git
 
 # Create app and data directories
 WORKDIR /app
