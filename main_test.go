@@ -824,6 +824,74 @@ func TestHandleProjectSettings(t *testing.T) {
 	}
 }
 
+// TestHandleProjectSettingsEmailImmediate tests email_immediate field in POST /api/project-settings.
+func TestHandleProjectSettingsEmailImmediate(t *testing.T) {
+	originalStore := store
+	originalSMTP := smtpEnabled
+	defer func() {
+		store = originalStore
+		smtpEnabled = originalSMTP
+	}()
+	store = newTestStore(t)
+	smtpEnabled = true
+	userID, cookie := newTestAuth(t, store)
+
+	repoID, err := store.AddRepo(userID, Project{
+		Name:     "Test Project",
+		Platform: "github",
+		RepoURL:  "https://github.com/test/repo",
+	})
+	if err != nil {
+		t.Fatalf("AddRepo failed: %v", err)
+	}
+
+	// Enable email_immediate
+	body := strings.NewReader(`{"repo_id":"` + repoID + `","push_enabled":true,"email_immediate":true}`)
+	req, _ := http.NewRequest("POST", "/api/project-settings", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleProjectSettings).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %v: %s", w.Code, w.Body.String())
+	}
+	projects := store.GetUserRepos(userID)
+	if !projects[0].EmailImmediate {
+		t.Error("expected email_immediate=true after handler call")
+	}
+
+	// Disable email_immediate
+	body = strings.NewReader(`{"repo_id":"` + repoID + `","push_enabled":true,"email_immediate":false}`)
+	req, _ = http.NewRequest("POST", "/api/project-settings", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	requireAuth(handleProjectSettings).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %v: %s", w.Code, w.Body.String())
+	}
+	projects = store.GetUserRepos(userID)
+	if projects[0].EmailImmediate {
+		t.Error("expected email_immediate=false after disabling")
+	}
+
+	// email_immediate silently ignored when smtpEnabled=false
+	smtpEnabled = false
+	body = strings.NewReader(`{"repo_id":"` + repoID + `","push_enabled":true,"email_immediate":true}`)
+	req, _ = http.NewRequest("POST", "/api/project-settings", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	requireAuth(handleProjectSettings).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 even when smtp disabled, got %v", w.Code)
+	}
+	projects = store.GetUserRepos(userID)
+	if projects[0].EmailImmediate {
+		t.Error("expected email_immediate unchanged (false) when smtp disabled")
+	}
+}
+
 // BenchmarkStoreAddRepo benchmarks adding repos
 func BenchmarkStoreAddRepo(b *testing.B) {
 	s, _ := NewStore(":memory:")
