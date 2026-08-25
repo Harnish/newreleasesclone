@@ -484,7 +484,7 @@ func (s *Store) SetProjectEmailImmediate(userID, repoID string, enabled bool) (b
 	return n > 0, nil
 }
 
-func (s *Store) getImmediateEmailUsersForRepo(repoID string) []User {
+func (s *Store) getImmediateEmailUsersForRepo(repoID string) ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT u.id, u.email, u.email_verified
 		FROM users u
@@ -494,8 +494,7 @@ func (s *Store) getImmediateEmailUsersForRepo(repoID string) []User {
 		  AND u.email_verified = 1
 		  AND u.email != ''`, repoID)
 	if err != nil {
-		log.Printf("⚠ getImmediateEmailUsersForRepo query failed: %v", err)
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 	var users []User
@@ -509,14 +508,17 @@ func (s *Store) getImmediateEmailUsersForRepo(repoID string) []User {
 		u.EmailVerified = verified != 0
 		users = append(users, u)
 	}
-	return users
+	return users, nil
 }
 
 func (s *Store) sendImmediateEmails(repoID string, project Project, newReleases []Release) {
 	for _, release := range newReleases {
-		users := s.getImmediateEmailUsersForRepo(repoID)
-		if users == nil {
-			log.Printf("⚠ sendImmediateEmails: skipping release %s (query failed)", release.Version)
+		users, err := s.getImmediateEmailUsersForRepo(repoID)
+		if err != nil {
+			log.Printf("⚠ sendImmediateEmails: skipping release %s (query failed: %v)", release.Version, err)
+			continue
+		}
+		if len(users) == 0 {
 			continue
 		}
 		for _, u := range users {

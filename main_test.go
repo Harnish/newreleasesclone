@@ -751,7 +751,10 @@ func TestGetImmediateEmailUsers(t *testing.T) {
 	s.AddRepo(userC.ID, Project{Name: "Proj", Platform: "github", RepoURL: "https://github.com/x/y"})
 	// email_immediate stays false (default)
 
-	users := s.getImmediateEmailUsersForRepo(repoID)
+	users, err := s.getImmediateEmailUsersForRepo(repoID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if len(users) != 1 {
 		t.Fatalf("expected 1 user, got %d", len(users))
 	}
