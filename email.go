@@ -95,3 +95,19 @@ func buildDailySummaryBody(releases []Release) string {
 func (c SMTPConfig) SendDailySummary(to string, releases []Release) error {
 	return c.SendMail(to, "Your daily release summary", buildDailySummaryBody(releases))
 }
+
+// buildReleaseEmailBody formats the plain-text body for a single release notification.
+func buildReleaseEmailBody(project Project, release Release) string {
+	var buf strings.Builder
+	fmt.Fprintf(&buf, "%s %s has been released.\n\n%s", project.Name, release.Version, release.URL)
+	if release.ReleaseNotes != "" {
+		fmt.Fprintf(&buf, "\n\n%s", release.ReleaseNotes)
+	}
+	return buf.String()
+}
+
+// SendReleaseEmail sends an immediate release notification to the given address.
+func (c SMTPConfig) SendReleaseEmail(to string, project Project, release Release) error {
+	subject := fmt.Sprintf("%s %s released", project.Name, release.Version)
+	return c.SendMail(to, subject, buildReleaseEmailBody(project, release))
+}

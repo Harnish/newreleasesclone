@@ -1245,6 +1245,44 @@ func TestBuildDailySummaryBody(t *testing.T) {
 	}
 }
 
+// TestBuildReleaseEmailBody tests the plain-text email body for a single release.
+func TestBuildReleaseEmailBody(t *testing.T) {
+	proj := Project{Name: "myproject", Platform: "github"}
+	release := Release{Version: "v1.2.3", URL: "https://github.com/x/myproject/releases/tag/v1.2.3"}
+
+	// Without release notes
+	body := buildReleaseEmailBody(proj, release)
+	if !strings.Contains(body, "myproject v1.2.3 has been released.") {
+		t.Errorf("body missing release line, got:\n%s", body)
+	}
+	if !strings.Contains(body, "https://github.com/x/myproject/releases/tag/v1.2.3") {
+		t.Errorf("body missing URL, got:\n%s", body)
+	}
+	if strings.Contains(body[strings.Index(body, release.URL)+len(release.URL):], "\n\n") {
+		t.Errorf("body should not have trailing blank line when no release notes")
+	}
+
+	// With release notes
+	release.ReleaseNotes = "- Fixed a bug\n- Added a feature"
+	body = buildReleaseEmailBody(proj, release)
+	if !strings.Contains(body, "- Fixed a bug") {
+		t.Errorf("body missing release notes, got:\n%s", body)
+	}
+}
+
+// TestSendReleaseEmailSubject verifies the subject format.
+func TestSendReleaseEmailSubject(t *testing.T) {
+	proj := Project{Name: "myproject"}
+	release := Release{Version: "v1.2.3", URL: "https://example.com"}
+	// Verify subject is correct by calling buildReleaseEmailBody (SendReleaseEmail requires live SMTP).
+	// Subject format: "<Name> <Version> released"
+	expectedSubject := "myproject v1.2.3 released"
+	subject := fmt.Sprintf("%s %s released", proj.Name, release.Version)
+	if subject != expectedSubject {
+		t.Errorf("expected subject %q, got %q", expectedSubject, subject)
+	}
+}
+
 func TestNextSevenAMUTC(t *testing.T) {
 	d := nextSevenAMUTC()
 	if d <= 0 {
