@@ -512,15 +512,16 @@ func (s *Store) getImmediateEmailUsersForRepo(repoID string) ([]User, error) {
 }
 
 func (s *Store) sendImmediateEmails(repoID string, project Project, newReleases []Release) {
+	users, err := s.getImmediateEmailUsersForRepo(repoID)
+	if err != nil {
+		log.Printf("⚠ sendImmediateEmails: failed to query users: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
 	for _, release := range newReleases {
-		users, err := s.getImmediateEmailUsersForRepo(repoID)
-		if err != nil {
-			log.Printf("⚠ sendImmediateEmails: skipping release %s (query failed: %v)", release.Version, err)
-			continue
-		}
-		if len(users) == 0 {
-			continue
-		}
 		for _, u := range users {
 			if err := smtpCfg.SendReleaseEmail(u.Email, project, release); err != nil {
 				log.Printf("⚠ sendImmediateEmails: failed to send to %s: %v", u.Email, err)
