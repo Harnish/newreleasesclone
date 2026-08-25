@@ -534,7 +534,6 @@ func handlePushSubscribe(w http.ResponseWriter, r *http.Request, userID string) 
 	}
 }
 
-// POST /api/project-settings — update per-project settings (push_enabled).
 // POST /api/project-settings — update per-project settings (push_enabled, email_immediate).
 func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string) {
 	if r.Method != http.MethodPost {
@@ -565,7 +564,8 @@ func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string
 	}
 	if smtpEnabled {
 		if _, err := store.SetProjectEmailImmediate(userID, req.RepoID, req.EmailImmediate); err != nil {
-			log.Printf("⚠ SetProjectEmailImmediate failed: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
