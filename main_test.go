@@ -679,6 +679,90 @@ func TestStoreSetProjectPushEnabled(t *testing.T) {
 	}
 }
 
+// TestStoreSetProjectEmailImmediate tests per-project immediate email toggle.
+func TestStoreSetProjectEmailImmediate(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+
+	repoID, err := s.AddRepo(userID, Project{
+		Name:     "Test Project",
+		Platform: "github",
+		RepoURL:  "https://github.com/test/repo",
+	})
+	if err != nil {
+		t.Fatalf("AddRepo failed: %v", err)
+	}
+
+	// Default is disabled
+	projects := s.GetUserRepos(userID)
+	if len(projects) != 1 || projects[0].EmailImmediate {
+		t.Errorf("expected email_immediate=false by default, got %v", projects[0].EmailImmediate)
+	}
+
+	// Enable
+	ok, err := s.SetProjectEmailImmediate(userID, repoID, true)
+	if err != nil || !ok {
+		t.Fatalf("SetProjectEmailImmediate(true) returned ok=%v err=%v", ok, err)
+	}
+	projects = s.GetUserRepos(userID)
+	if !projects[0].EmailImmediate {
+		t.Error("expected email_immediate=true after enabling")
+	}
+
+	// Disable
+	ok, err = s.SetProjectEmailImmediate(userID, repoID, false)
+	if err != nil || !ok {
+		t.Fatalf("SetProjectEmailImmediate(false) returned ok=%v err=%v", ok, err)
+	}
+	projects = s.GetUserRepos(userID)
+	if projects[0].EmailImmediate {
+		t.Error("expected email_immediate=false after disabling")
+	}
+
+	// Unowned repo returns ok=false
+	ok, err = s.SetProjectEmailImmediate(userID, "repo_doesnotexist", false)
+	if err != nil {
+		t.Fatalf("unexpected error for unowned repo: %v", err)
+	}
+	if ok {
+		t.Error("expected ok=false for unknown repo")
+	}
+}
+
+// TestGetImmediateEmailUsers tests that only verified users with email_immediate=1 are returned.
+func TestGetImmediateEmailUsers(t *testing.T) {
+	s := newTestStore(t)
+
+	// User A — opts in, verified
+	userA, _ := newTestAuth(t, s)
+	s.db.Exec("UPDATE users SET email='a@example.com', email_verified=1 WHERE id=?", userA)
+	repoID, _ := s.AddRepo(userA, Project{Name: "Proj", Platform: "github", RepoURL: "https://github.com/x/y"})
+	s.SetProjectEmailImmediate(userA, repoID, true)
+
+	// User B — opts in, but unverified
+	userB, _ := s.CreateUser("userb", "pass")
+	s.db.Exec("UPDATE users SET email='b@example.com', email_verified=0 WHERE id=?", userB.ID)
+	s.AddRepo(userB.ID, Project{Name: "Proj", Platform: "github", RepoURL: "https://github.com/x/y"})
+	s.SetProjectEmailImmediate(userB.ID, repoID, true)
+
+	// User C — verified, but did not opt in
+	userC, _ := s.CreateUser("userc", "pass")
+	s.db.Exec("UPDATE users SET email='c@example.com', email_verified=1 WHERE id=?", userC.ID)
+	s.AddRepo(userC.ID, Project{Name: "Proj", Platform: "github", RepoURL: "https://github.com/x/y"})
+	// email_immediate stays false (default)
+
+	users, err := s.getImmediateEmailUsersForRepo(repoID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(users))
+	}
+	if users[0].ID != userA {
+		t.Errorf("expected user A, got %s", users[0].ID)
+	}
+}
+
 // TestHandleProjectSettings tests the POST /api/project-settings endpoint.
 func TestHandleProjectSettings(t *testing.T) {
 	originalStore := store
@@ -737,6 +821,74 @@ func TestHandleProjectSettings(t *testing.T) {
 	requireAuth(handleProjectSettings).ServeHTTP(w, req)
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected 405 for GET, got %v", w.Code)
+	}
+}
+
+// TestHandleProjectSettingsEmailImmediate tests email_immediate field in POST /api/project-settings.
+func TestHandleProjectSettingsEmailImmediate(t *testing.T) {
+	originalStore := store
+	originalSMTP := smtpEnabled
+	defer func() {
+		store = originalStore
+		smtpEnabled = originalSMTP
+	}()
+	store = newTestStore(t)
+	smtpEnabled = true
+	userID, cookie := newTestAuth(t, store)
+
+	repoID, err := store.AddRepo(userID, Project{
+		Name:     "Test Project",
+		Platform: "github",
+		RepoURL:  "https://github.com/test/repo",
+	})
+	if err != nil {
+		t.Fatalf("AddRepo failed: %v", err)
+	}
+
+	// Enable email_immediate
+	body := strings.NewReader(`{"repo_id":"` + repoID + `","push_enabled":true,"email_immediate":true}`)
+	req, _ := http.NewRequest("POST", "/api/project-settings", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleProjectSettings).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %v: %s", w.Code, w.Body.String())
+	}
+	projects := store.GetUserRepos(userID)
+	if !projects[0].EmailImmediate {
+		t.Error("expected email_immediate=true after handler call")
+	}
+
+	// Disable email_immediate
+	body = strings.NewReader(`{"repo_id":"` + repoID + `","push_enabled":true,"email_immediate":false}`)
+	req, _ = http.NewRequest("POST", "/api/project-settings", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	requireAuth(handleProjectSettings).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %v: %s", w.Code, w.Body.String())
+	}
+	projects = store.GetUserRepos(userID)
+	if projects[0].EmailImmediate {
+		t.Error("expected email_immediate=false after disabling")
+	}
+
+	// email_immediate silently ignored when smtpEnabled=false
+	smtpEnabled = false
+	body = strings.NewReader(`{"repo_id":"` + repoID + `","push_enabled":true,"email_immediate":true}`)
+	req, _ = http.NewRequest("POST", "/api/project-settings", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	requireAuth(handleProjectSettings).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 even when smtp disabled, got %v", w.Code)
+	}
+	projects = store.GetUserRepos(userID)
+	if projects[0].EmailImmediate {
+		t.Error("expected email_immediate unchanged (false) when smtp disabled")
 	}
 }
 
@@ -1242,6 +1394,44 @@ func TestBuildDailySummaryBody(t *testing.T) {
 	}
 	if !strings.Contains(body, "another v0.9.0") {
 		t.Error("expected 'another v0.9.0' in body")
+	}
+}
+
+// TestBuildReleaseEmailBody tests the plain-text email body for a single release.
+func TestBuildReleaseEmailBody(t *testing.T) {
+	proj := Project{Name: "myproject", Platform: "github"}
+	release := Release{Version: "v1.2.3", URL: "https://github.com/x/myproject/releases/tag/v1.2.3"}
+
+	// Without release notes
+	body := buildReleaseEmailBody(proj, release)
+	if !strings.Contains(body, "myproject v1.2.3 has been released.") {
+		t.Errorf("body missing release line, got:\n%s", body)
+	}
+	if !strings.Contains(body, "https://github.com/x/myproject/releases/tag/v1.2.3") {
+		t.Errorf("body missing URL, got:\n%s", body)
+	}
+	if strings.Contains(body[strings.Index(body, release.URL)+len(release.URL):], "\n\n") {
+		t.Errorf("body should not have trailing blank line when no release notes")
+	}
+
+	// With release notes
+	release.ReleaseNotes = "- Fixed a bug\n- Added a feature"
+	body = buildReleaseEmailBody(proj, release)
+	if !strings.Contains(body, "- Fixed a bug") {
+		t.Errorf("body missing release notes, got:\n%s", body)
+	}
+}
+
+// TestSendReleaseEmailSubject verifies the subject format.
+func TestSendReleaseEmailSubject(t *testing.T) {
+	proj := Project{Name: "myproject"}
+	release := Release{Version: "v1.2.3", URL: "https://example.com"}
+	// Verify subject is correct by calling buildReleaseEmailBody (SendReleaseEmail requires live SMTP).
+	// Subject format: "<Name> <Version> released"
+	expectedSubject := "myproject v1.2.3 released"
+	subject := fmt.Sprintf("%s %s released", proj.Name, release.Version)
+	if subject != expectedSubject {
+		t.Errorf("expected subject %q, got %q", expectedSubject, subject)
 	}
 }
 

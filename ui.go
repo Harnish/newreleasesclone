@@ -1048,6 +1048,7 @@ function buildReleasesHTML(releases, projects) {
                         'data-gitlab-enabled="' + (proj && proj.gitlab_sync_enabled ? '1' : '0') + '" ' +
                         'data-gitlab-freq="' + esc((proj && proj.gitlab_sync_frequency) || 'daily') + '" ' +
                         'data-gitlab-error="' + esc((proj && proj.last_gitlab_sync_error) || '') + '" ' +
+                        'data-email-immediate="' + (proj && proj.email_immediate ? '1' : '0') + '" ' +
                         'onclick="openSettingsPanel(this)">&#x2699;</button>' +
                     '<button class="btn btn-ghost proj-ctrl" title="Delete" style="color:#f87171" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
@@ -1135,7 +1136,8 @@ function loadReleases() {
             var fresh = allProjects.filter(function(p) { return p.id === _settingsRepoID; })[0];
             if (fresh) {
                 loadSettingsPanel(_settingsRepoID, fresh.push_enabled,
-                    fresh.gitlab_sync_enabled, fresh.gitlab_sync_frequency || 'daily', fresh.last_gitlab_sync_error || '');
+                    fresh.gitlab_sync_enabled, fresh.gitlab_sync_frequency || 'daily', fresh.last_gitlab_sync_error || '',
+                    !!fresh.email_immediate);
             } else {
                 closeSettingsPanel();
                 _settingsRepoID = null;
@@ -1157,12 +1159,13 @@ function openSettingsPanel(btn) {
     var glEnabled = btn.dataset.gitlabEnabled === '1';
     var glFreq = btn.dataset.gitlabFreq || 'daily';
     var glError = btn.dataset.gitlabError || '';
+    var emailImmediate = btn.dataset.emailImmediate === '1';
     _settingsRepoID = id;
     document.getElementById('settings-panel-title').textContent = name;
     closeAddPanel();
     closeAccountPanel();
     document.getElementById('settings-panel').classList.add('open');
-    loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError);
+    loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImmediate);
 }
 
 function closeSettingsPanel() {
@@ -1170,13 +1173,14 @@ function closeSettingsPanel() {
     _settingsRepoID = null;
 }
 
-function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError) {
+function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImmediate) {
     var body = document.getElementById('settings-panel-body');
     body.innerHTML = '<div style="font-size:0.85rem;color:#64748b">Loading...</div>';
     fetch('/api/webhooks?repo_id=' + encodeURIComponent(id))
         .then(function(r) { return r.json(); })
         .then(function(hooks) {
             body.innerHTML = renderSettingsPanelBody(id, pushEnabled, hooks || [], glEnabled, glFreq, glError);
+            addEmailToggleToPanel(id, !!emailImmediate);
         })
         .catch(function() {
             body.innerHTML = '<div style="color:#f87171;font-size:0.85rem">Failed to load settings.</div>';
@@ -1189,7 +1193,7 @@ function renderSettingsPanelBody(id, pushEnabled, hooks, glEnabled, glFreq, glEr
             '<div class="toggle-row">' +
                 '<span>Notify on new releases</span>' +
                 '<label class="toggle">' +
-                    '<input type="checkbox" ' + (pushEnabled ? 'checked' : '') + ' onchange="doTogglePush(this,\'' + esc(id) + '\')">' +
+                    '<input type="checkbox" id="push-cb-' + esc(id) + '" ' + (pushEnabled ? 'checked' : '') + ' onchange="doTogglePush(this,\'' + esc(id) + '\')">' +
                     '<span class="toggle-slider"></span>' +
                 '</label>' +
             '</div>' +
@@ -1258,11 +1262,64 @@ function doSyncGitLabNow(id) {
         }).catch(function(err) { toast('Error: ' + err, 'err'); });
 }
 
+function addEmailToggleToPanel(id, emailImmediate) {
+    var panelBody = document.getElementById('settings-panel-body');
+
+    var section = document.createElement('div');
+    section.className = 'settings-section';
+
+    var sectionTitle = document.createElement('div');
+    sectionTitle.className = 'settings-section-title';
+    sectionTitle.textContent = 'Email Notifications';
+    section.appendChild(sectionTitle);
+
+    var row = document.createElement('div');
+    row.className = 'toggle-row';
+
+    var labelSpan = document.createElement('span');
+    labelSpan.textContent = 'Notify on new releases';
+    row.appendChild(labelSpan);
+
+    var label = document.createElement('label');
+    label.className = 'toggle';
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = 'ei-cb-' + id;
+    cb.checked = emailImmediate;
+
+    var smtpOk = currentUser && currentUser.smtp_enabled;
+    var verified = currentUser && currentUser.email_verified;
+
+    if (!smtpOk) {
+        cb.disabled = true;
+        cb.title = 'Email not configured';
+    } else if (!verified) {
+        cb.disabled = true;
+        cb.title = 'Verify your email to enable';
+    } else {
+        cb.addEventListener('change', function() {
+            doToggleEmailImmediate(id, cb.checked);
+        });
+    }
+
+    var slider = document.createElement('span');
+    slider.className = 'toggle-slider';
+    label.appendChild(cb);
+    label.appendChild(slider);
+    row.appendChild(label);
+    section.appendChild(row);
+
+    panelBody.appendChild(section);
+}
+
 function doTogglePush(checkbox, id) {
+    var eiCb = document.getElementById('ei-cb-' + id);
+    var emailImmediate = eiCb ? eiCb.checked : false;
     fetch('/api/project-settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({repo_id: id, push_enabled: checkbox.checked})
+        body: JSON.stringify({repo_id: id, push_enabled: checkbox.checked, email_immediate: emailImmediate})
     }).then(function(r) {
         if (r.ok) {
             toast('Notification setting updated.', 'ok');
@@ -1272,6 +1329,28 @@ function doTogglePush(checkbox, id) {
         }
     }).catch(function() {
         checkbox.checked = !checkbox.checked;
+        toast('Error updating setting.', 'err');
+    });
+}
+
+function doToggleEmailImmediate(id, checked) {
+    var pushCb = document.getElementById('push-cb-' + id);
+    var pushEnabled = pushCb ? pushCb.checked : false;
+    fetch('/api/project-settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({repo_id: id, push_enabled: pushEnabled, email_immediate: checked})
+    }).then(function(r) {
+        if (r.ok) {
+            toast('Notification setting updated.', 'ok');
+        } else {
+            var cb = document.getElementById('ei-cb-' + id);
+            if (cb) cb.checked = !checked;
+            toast('Failed to update setting.', 'err');
+        }
+    }).catch(function() {
+        var cb = document.getElementById('ei-cb-' + id);
+        if (cb) cb.checked = !checked;
         toast('Error updating setting.', 'err');
     });
 }

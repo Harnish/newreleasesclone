@@ -37,6 +37,7 @@ type Project struct {
 	LastRefresh         time.Time `json:"last_refresh"`
 	RefreshCount        int       `json:"refresh_count"`
 	PushEnabled         bool      `json:"push_enabled"`
+	EmailImmediate      bool      `json:"email_immediate"`
 	GitLabSyncEnabled   bool      `json:"gitlab_sync_enabled"`
 	GitLabSyncFrequency string    `json:"gitlab_sync_frequency,omitempty"`
 	LastGitLabSyncAt    time.Time `json:"last_gitlab_sync_at,omitempty"`

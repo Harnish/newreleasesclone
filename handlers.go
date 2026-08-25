@@ -534,15 +534,16 @@ func handlePushSubscribe(w http.ResponseWriter, r *http.Request, userID string) 
 	}
 }
 
-// POST /api/project-settings — update per-project settings (push_enabled).
+// POST /api/project-settings — update per-project settings (push_enabled, email_immediate).
 func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	var req struct {
-		RepoID      string `json:"repo_id"`
-		PushEnabled bool   `json:"push_enabled"`
+		RepoID         string `json:"repo_id"`
+		PushEnabled    bool   `json:"push_enabled"`
+		EmailImmediate bool   `json:"email_immediate"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -560,6 +561,12 @@ func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string
 	if !ok {
 		http.Error(w, "project not found", http.StatusNotFound)
 		return
+	}
+	if smtpEnabled {
+		if _, err := store.SetProjectEmailImmediate(userID, req.RepoID, req.EmailImmediate); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
