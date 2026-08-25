@@ -317,6 +317,15 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 13 {
+		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN email_immediate INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("failed to migrate to v13 (email_immediate): %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 13"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -457,6 +466,65 @@ func (s *Store) SetProjectPushEnabled(userID, repoID string, enabled bool) (bool
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+func (s *Store) SetProjectEmailImmediate(userID, repoID string, enabled bool) (bool, error) {
+	val := 0
+	if enabled {
+		val = 1
+	}
+	res, err := s.db.Exec(
+		"UPDATE user_repos SET email_immediate = ? WHERE user_id = ? AND repo_id = ?",
+		val, userID, repoID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+func (s *Store) getImmediateEmailUsersForRepo(repoID string) []User {
+	rows, err := s.db.Query(`
+		SELECT u.id, u.email, u.email_verified
+		FROM users u
+		INNER JOIN user_repos ur ON ur.user_id = u.id
+		WHERE ur.repo_id = ?
+		  AND ur.email_immediate = 1
+		  AND u.email_verified = 1
+		  AND u.email != ''`, repoID)
+	if err != nil {
+		log.Printf("⚠ getImmediateEmailUsersForRepo query failed: %v", err)
+		return nil
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		var verified int
+		if err := rows.Scan(&u.ID, &u.Email, &verified); err != nil {
+			log.Printf("⚠ failed to scan user: %v", err)
+			continue
+		}
+		u.EmailVerified = verified != 0
+		users = append(users, u)
+	}
+	return users
+}
+
+func (s *Store) sendImmediateEmails(repoID string, project Project, newReleases []Release) {
+	for _, release := range newReleases {
+		users := s.getImmediateEmailUsersForRepo(repoID)
+		if users == nil {
+			log.Printf("⚠ sendImmediateEmails: skipping release %s (query failed)", release.Version)
+			continue
+		}
+		for _, u := range users {
+			if err := smtpCfg.SendReleaseEmail(u.Email, project, release); err != nil {
+				log.Printf("⚠ sendImmediateEmails: failed to send to %s: %v", u.Email, err)
+			}
+		}
+	}
 }
 
 // ---- GitLab sync ----
@@ -1010,6 +1078,7 @@ func (s *Store) RemoveUserRepo(userID, repoID string) bool {
 func (s *Store) GetUserRepos(userID string) []Project {
 	rows, err := s.db.Query(`
 		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled,
+		       ur.email_immediate,
 		       ur.gitlab_sync_enabled, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error,
 		       ur.gitlab_project_path
 		FROM repos r
@@ -1025,8 +1094,9 @@ func (s *Store) GetUserRepos(userID string) []Project {
 	for rows.Next() {
 		var p Project
 		var lastRefresh, lastGitLabSync string
-		var pushEnabled, gitlabSyncEnabled int
+		var pushEnabled, emailImmediate, gitlabSyncEnabled int
 		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled,
+			&emailImmediate,
 			&gitlabSyncEnabled, &p.GitLabSyncFrequency, &lastGitLabSync, &p.LastGitLabSyncError,
 			&p.GitLabProjectPath); err != nil {
 			log.Printf("⚠ Failed to scan project: %v", err)
@@ -1039,6 +1109,7 @@ func (s *Store) GetUserRepos(userID string) []Project {
 			p.LastGitLabSyncAt, _ = time.Parse(time.RFC3339, lastGitLabSync)
 		}
 		p.PushEnabled = pushEnabled != 0
+		p.EmailImmediate = emailImmediate != 0
 		p.GitLabSyncEnabled = gitlabSyncEnabled != 0
 		projects = append(projects, p)
 	}
@@ -1308,6 +1379,9 @@ func (s *Store) RefreshProject(repoID string) {
 		if len(newReleases) > 0 {
 			go s.sendPushNotifications(repoID, project.Name, newReleases)
 			go s.sendWebhooks(repoID, project, newReleases)
+			if smtpEnabled {
+				go s.sendImmediateEmails(repoID, project, newReleases)
+			}
 		}
 	}
 }

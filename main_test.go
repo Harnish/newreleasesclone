@@ -679,6 +679,87 @@ func TestStoreSetProjectPushEnabled(t *testing.T) {
 	}
 }
 
+// TestStoreSetProjectEmailImmediate tests per-project immediate email toggle.
+func TestStoreSetProjectEmailImmediate(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+
+	repoID, err := s.AddRepo(userID, Project{
+		Name:     "Test Project",
+		Platform: "github",
+		RepoURL:  "https://github.com/test/repo",
+	})
+	if err != nil {
+		t.Fatalf("AddRepo failed: %v", err)
+	}
+
+	// Default is disabled
+	projects := s.GetUserRepos(userID)
+	if len(projects) != 1 || projects[0].EmailImmediate {
+		t.Errorf("expected email_immediate=false by default, got %v", projects[0].EmailImmediate)
+	}
+
+	// Enable
+	ok, err := s.SetProjectEmailImmediate(userID, repoID, true)
+	if err != nil || !ok {
+		t.Fatalf("SetProjectEmailImmediate(true) returned ok=%v err=%v", ok, err)
+	}
+	projects = s.GetUserRepos(userID)
+	if !projects[0].EmailImmediate {
+		t.Error("expected email_immediate=true after enabling")
+	}
+
+	// Disable
+	ok, err = s.SetProjectEmailImmediate(userID, repoID, false)
+	if err != nil || !ok {
+		t.Fatalf("SetProjectEmailImmediate(false) returned ok=%v err=%v", ok, err)
+	}
+	projects = s.GetUserRepos(userID)
+	if projects[0].EmailImmediate {
+		t.Error("expected email_immediate=false after disabling")
+	}
+
+	// Unowned repo returns ok=false
+	ok, err = s.SetProjectEmailImmediate(userID, "repo_doesnotexist", false)
+	if err != nil {
+		t.Fatalf("unexpected error for unowned repo: %v", err)
+	}
+	if ok {
+		t.Error("expected ok=false for unknown repo")
+	}
+}
+
+// TestGetImmediateEmailUsers tests that only verified users with email_immediate=1 are returned.
+func TestGetImmediateEmailUsers(t *testing.T) {
+	s := newTestStore(t)
+
+	// User A — opts in, verified
+	userA, _ := newTestAuth(t, s)
+	s.db.Exec("UPDATE users SET email='a@example.com', email_verified=1 WHERE id=?", userA)
+	repoID, _ := s.AddRepo(userA, Project{Name: "Proj", Platform: "github", RepoURL: "https://github.com/x/y"})
+	s.SetProjectEmailImmediate(userA, repoID, true)
+
+	// User B — opts in, but unverified
+	userB, _ := s.CreateUser("userb", "pass")
+	s.db.Exec("UPDATE users SET email='b@example.com', email_verified=0 WHERE id=?", userB.ID)
+	s.AddRepo(userB.ID, Project{Name: "Proj", Platform: "github", RepoURL: "https://github.com/x/y"})
+	s.SetProjectEmailImmediate(userB.ID, repoID, true)
+
+	// User C — verified, but did not opt in
+	userC, _ := s.CreateUser("userc", "pass")
+	s.db.Exec("UPDATE users SET email='c@example.com', email_verified=1 WHERE id=?", userC.ID)
+	s.AddRepo(userC.ID, Project{Name: "Proj", Platform: "github", RepoURL: "https://github.com/x/y"})
+	// email_immediate stays false (default)
+
+	users := s.getImmediateEmailUsersForRepo(repoID)
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(users))
+	}
+	if users[0].ID != userA {
+		t.Errorf("expected user A, got %s", users[0].ID)
+	}
+}
+
 // TestHandleProjectSettings tests the POST /api/project-settings endpoint.
 func TestHandleProjectSettings(t *testing.T) {
 	originalStore := store
