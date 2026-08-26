@@ -4,7 +4,7 @@
 
 ## Planned
 - [x] **Add Send Email Summary** - daily digest email at 7am UTC of previous day's releases; opt-in toggle in account settings panel (⚙ in header)
-- [ ] **Add immediate email** - to send an when a new release is detected. (user option per project)
+- [x] **Add immediate email** - to send an when a new release is detected. (user option per project)
 - [ ] **Main page sort options** - sort by date added, latest release, and alphabetically.
 - [ ] **Determine if a release is a prerelease or not** - allow the user per project to be notified about prereleases.
 - [ ] **Use project icon** - Put the project icon to the left of the project name.  
@@ -14,6 +14,8 @@
 
 ## Done
 
+- [x] **Immediate email on new release** — plain-text email sent the moment a new release is detected (opt-in per project per user, gated on SMTP configured + verified email); toggle in the project settings panel alongside push notifications
+- [x] **GitLab backup badge on Releases tab** — the `[BACKUP]` link to the mirrored GitLab project (already shown on Projects-tab cards) now also shows on the Releases-tab project header, for consistency across both views
 - [x] **Incorporate syncrepos project** — per-user GitLab instance URL + API token (Account Settings panel); per-project "Enable GitLab sync" with daily/weekly/monthly frequency (project settings panel), ported GitLab REST client + ephemeral mirror clone/push from `syncrepos`; optional auto-generated "Awesome" README (grouped by platform) pushed to a GitLab project under the user's namespace, implementing syncrepos's own unfinished TODO item
 - [x] **Pagenate releases and projects** - Allow the user to set the number of projects per page between 5,10 and 20.  Pagenate beyond that number.
 - [x] **User accounts with auth** — register/login/logout, session cookies, per-user project tracking

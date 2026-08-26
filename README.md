@@ -9,6 +9,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **Shared release data**: Two users adding the same repo share one set of fetched releases
 - **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
 - **Browser push notifications**: Click 🔔 in the header to subscribe; notifications fire when a new release is detected on any tracked repo
+- **Email notifications**: Opt-in per project — a daily digest of the previous day's releases, and/or an immediate plain-text email the moment a new release is detected (requires SMTP configured and a verified email)
 - **Webhooks**: Per-project outbound webhooks with optional HMAC-SHA256 signing; managed inline from the Projects tab
 - **GitLab sync**: Register your own GitLab instance + API token (Account Settings), then opt any GitHub/GitLab project into a daily/weekly/monthly mirror push. Optional "Awesome" README, grouped by platform, auto-generated and pushed to a GitLab project under your namespace
 - **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
@@ -70,6 +71,7 @@ All data endpoints require a valid session cookie (set by `/api/login` or `/api/
 | `POST` | `/api/gitlab-settings/awesome` | Enable/disable the Awesome page `{enabled, repo_name}` |
 | `POST` | `/api/project-gitlab-sync` | Enable/disable GitLab sync for a project `{repo_id, enabled, frequency}` |
 | `POST` | `/api/project-gitlab-sync/sync-now?repo_id=<id>` | Manually trigger a GitLab sync |
+| `POST` | `/api/project-settings` | Per-project notification settings `{repo_id, push_enabled, email_immediate}` |
 
 
 |--------|------|-------------|
