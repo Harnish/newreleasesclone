@@ -1000,6 +1000,9 @@ function buildReleasesHTML(releases, projects) {
         var proj = projMap[pid];
         var pname = proj ? proj.name : 'Unknown';
         var platform = proj ? proj.platform : '';
+        var backupUrl = proj && proj.gitlab_project_path ? proj.gitlab_project_path.replace(/\.git$/, '') : '';
+        var backupLink = (proj && proj.gitlab_sync_enabled && /^https?:\/\//i.test(backupUrl)) ?
+            '<a href="' + esc(backupUrl) + '" target="_blank" rel="noopener noreferrer" class="badge">[BACKUP]</a>' : '';
         var rels = groups[pid];
 
         var visible = rels.slice(0, 5);
@@ -1037,6 +1040,7 @@ function buildReleasesHTML(releases, projects) {
                 '<div class="proj-header-left">' +
                     '<span class="proj-name">' + esc(pname) + '</span>' +
                     (platform ? '<span class="badge ' + esc(platform) + '">' + esc(platform) + '</span>' : '') +
+                    backupLink +
                 '</div>' +
                 '<div class="proj-right">' +
                     '<button class="btn btn-ghost proj-ctrl" title="Refresh" ' +
