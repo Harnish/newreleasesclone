@@ -14,6 +14,7 @@
 
 ## Done
 
+- [x] **UI hardening** — AA contrast for muted text, keyboard focus rings, aria labels, touch-visible project controls, 16px inputs on mobile, long-text truncation, session-expiry handling and retry on load failure; added PRODUCT.md / DESIGN.md design context
 - [x] **Immediate email on new release** — plain-text email sent the moment a new release is detected (opt-in per project per user, gated on SMTP configured + verified email); toggle in the project settings panel alongside push notifications
 - [x] **GitLab backup badge on Releases tab** — the `[BACKUP]` link to the mirrored GitLab project (already shown on Projects-tab cards) now also shows on the Releases-tab project header, for consistency across both views
 - [x] **Incorporate syncrepos project** — per-user GitLab instance URL + API token (Account Settings panel); per-project "Enable GitLab sync" with daily/weekly/monthly frequency (project settings panel), ported GitLab REST client + ephemeral mirror clone/push from `syncrepos`; optional auto-generated "Awesome" README (grouped by platform) pushed to a GitLab project under the user's namespace, implementing syncrepos's own unfinished TODO item

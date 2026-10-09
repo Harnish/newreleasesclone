@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-09T00:00:00Z",
+  "title": "Design System: Release Tracker",
+  "extensions": {
+    "colorMeta": {
+      "ink-night": {"role": "neutral", "displayName": "Ink Night", "canonical": "#0f172a", "tonalRamp": ["#020617","#0f172a","#1e293b","#334155","#475569","#64748b","#94a3b8","#e2e8f0"]},
+      "signal-blue": {"role": "primary", "displayName": "Signal Blue", "canonical": "#60a5fa", "tonalRamp": ["#1e3a8a","#1d4ed8","#2563eb","#3b82f6","#60a5fa","#93c5fd","#bfdbfe","#dbeafe"]},
+      "action-blue": {"role": "primary", "displayName": "Action Blue", "canonical": "#3b82f6", "tonalRamp": ["#1e3a8a","#1d4ed8","#2563eb","#3b82f6","#60a5fa","#93c5fd","#bfdbfe","#dbeafe"]}
+    },
+    "typographyMeta": {
+      "title": {"displayName": "Title", "purpose": "App and auth titles."},
+      "body": {"displayName": "Body", "purpose": "Forms, version tags, notes."},
+      "label": {"displayName": "Label", "purpose": "Uppercase section titles and badges."}
+    },
+    "shadows": [],
+    "motion": [
+      {"name": "fast", "value": "0.15s", "purpose": "Hover color/opacity."},
+      {"name": "panel", "value": "0.25s ease", "purpose": "Slide-over panels."}
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {"name": "Primary Button", "kind": "button", "refersTo": "button-primary", "description": "Filled blue action.",
+     "html": "<button class=\"ds-btn-primary\">Add project</button>",
+     "css": ".ds-btn-primary{background:#3b82f6;color:#fff;border:none;border-radius:5px;padding:.45rem .85rem;font-size:.78rem;font-weight:500;cursor:pointer;transition:background .15s}.ds-btn-primary:hover{background:#2563eb}.ds-btn-primary:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}"},
+    {"name": "Outline Button", "kind": "button", "refersTo": "button-outline", "description": "Secondary action.",
+     "html": "<button class=\"ds-btn-outline\">Refresh</button>",
+     "css": ".ds-btn-outline{background:transparent;color:#94a3b8;border:1px solid #334155;border-radius:5px;padding:.45rem .85rem;font-size:.78rem;font-weight:500;cursor:pointer;transition:background .15s,color .15s}.ds-btn-outline:hover{background:#1e293b;color:#e2e8f0}.ds-btn-outline:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}"},
+    {"name": "Text Input", "kind": "input", "refersTo": "input", "description": "Dark field with blue focus border.",
+     "html": "<input class=\"ds-input\" placeholder=\"owner/repo\">",
+     "css": ".ds-input{width:100%;padding:.55rem .75rem;background:#0f172a;border:1px solid #334155;border-radius:5px;color:#e2e8f0;font-size:.875rem}.ds-input:focus{outline:none;border-color:#3b82f6}"},
+    {"name": "Platform Badge", "kind": "chip", "refersTo": "badge", "description": "Tinted platform label.",
+     "html": "<span class=\"ds-badge\">GitHub</span>",
+     "css": ".ds-badge{font-size:.67rem;font-weight:600;padding:.18rem .45rem;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;background:#1e3a5f;color:#60a5fa}"},
+    {"name": "Project Card", "kind": "card", "refersTo": "card", "description": "Accordion project header with version line.",
+     "html": "<div class=\"ds-card\"><div class=\"ds-head\"><b>kubernetes</b><span class=\"ds-count\">30 releases</span></div><div class=\"ds-chips\"><a href=\"#\">v1.31.0</a> · 2d</div></div>",
+     "css": ".ds-card{background:#1e293b;border:1px solid #334155;border-radius:8px;overflow:hidden;color:#e2e8f0;font-family:system-ui,sans-serif}.ds-head{display:flex;justify-content:space-between;padding:.875rem 1.1rem;cursor:pointer}.ds-head:hover{background:#263548}.ds-count{color:#64748b;font-size:.78rem}.ds-chips{padding:.55rem 1.1rem;font-size:.8rem;color:#94a3b8;border-top:1px solid #334155}.ds-chips a{color:#60a5fa;text-decoration:none}"},
+    {"name": "Toggle", "kind": "custom", "refersTo": "toggle", "description": "36x20 pill switch.",
+     "html": "<label class=\"ds-toggle\"><input type=\"checkbox\" checked><span></span></label>",
+     "css": ".ds-toggle{position:relative;display:inline-block;width:36px;height:20px}.ds-toggle input{opacity:0;width:0;height:0}.ds-toggle span{position:absolute;inset:0;background:#334155;border-radius:20px;transition:background .2s;cursor:pointer}.ds-toggle span:before{content:'';position:absolute;height:14px;width:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s}.ds-toggle input:checked+span{background:#3b82f6}.ds-toggle input:checked+span:before{transform:translateX(16px)}"}
+  ],
+  "narrative": {
+    "northStar": "The Release Ledger",
+    "overview": "A dark, quiet ledger of versions. Stepped slate surfaces with hairline borders; blue is the single voice. Compact and dense for fast scanning on phone and desktop. Flat: depth from tone and 1px borders, never shadows.",
+    "keyCharacteristics": ["Dark slate, one blue accent", "Compact type and small radii", "Flat tonal layering, no shadows", "System font stack", "Slide-over panels from the right"],
+    "rules": [
+      {"name": "The One Voice Rule", "body": "Blue is the only accent. Platform badges are the sole exception and stay tiny.", "section": "colors"},
+      {"name": "The Tint Pair Rule", "body": "Any colored label is a dark tint background with bright same-hue text, never a saturated fill.", "section": "colors"},
+      {"name": "The Tone Not Size Rule", "body": "Separate levels with color step before enlarging type.", "section": "typography"},
+      {"name": "The Flat-By-Default Rule", "body": "Surfaces are separated by tone and hairline only. Do not add shadows.", "section": "elevation"}
+    ],
+    "dos": ["Do separate surfaces by tone step and a 1px #334155 border.", "Do use Signal Blue for versions and links, Action Blue for filled actions.", "Do give every colored label a dark-tint background with bright same-hue text.", "Do keep type compact (0.75–0.95rem) and radii between 3px and 10px.", "Do keep touch targets usable on phones even though visuals are compact."],
+    "donts": ["Don't add box-shadows or gradients.", "Don't introduce a second accent hue outside platform badges.", "Don't use saturated fills for labels or badges.", "Don't hide controls behind hover only; hover-reveal needs a focus and touch fallback."]
+  }
+}

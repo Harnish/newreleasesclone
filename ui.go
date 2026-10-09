@@ -40,7 +40,7 @@ body {
     color: #60a5fa;
     margin-bottom: 0.25rem;
 }
-.auth-subtitle { color: #64748b; font-size: 0.82rem; margin-bottom: 1.5rem; }
+.auth-subtitle { color: #8796ad; font-size: 0.82rem; margin-bottom: 1.5rem; }
 .auth-tabs {
     display: flex;
     gap: 0;
@@ -54,7 +54,7 @@ body {
     background: none;
     border: none;
     border-radius: 4px;
-    color: #64748b;
+    color: #8796ad;
     cursor: pointer;
     font-size: 0.82rem;
     font-weight: 500;
@@ -163,7 +163,9 @@ body {
     bottom: 0;
     overflow-y: auto;
     transform: translateX(100%);
-    transition: transform 0.25s ease;
+    transition: transform 0.25s ease, visibility 0s linear 0.25s;
+    visibility: hidden;
+    max-width: 100vw;
     z-index: 100;
 }
 .add-panel         { width: 300px; }
@@ -171,6 +173,8 @@ body {
 .account-panel     { width: 300px; }
 .add-panel.open, .settings-panel.open, .account-panel.open {
     transform: translateX(0);
+    visibility: visible;
+    transition-delay: 0s;
 }
 .add-panel-inner, .settings-panel-inner, .account-panel-inner {
     width: 100%;
@@ -191,7 +195,7 @@ body {
 .settings-section-title {
     font-size: 0.72rem;
     font-weight: 700;
-    color: #64748b;
+    color: #8796ad;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     margin-bottom: 0.6rem;
@@ -278,7 +282,7 @@ body {
 .proj-header-left { display: flex; align-items: center; gap: 0.6rem; }
 .proj-name { font-weight: 600; font-size: 0.95rem; }
 .proj-right { display: flex; align-items: center; gap: 0.75rem; }
-.ver-count { color: #64748b; font-size: 0.78rem; }
+.ver-count { color: #8796ad; font-size: 0.78rem; }
 .ver-chips {
     padding: 0.55rem 1.1rem;
     font-size: 0.8rem;
@@ -289,6 +293,7 @@ body {
     gap: 0 0.15rem;
     border-top: 1px solid #334155;
 }
+.ver-chip { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; margin-right: 0.45rem; }
 .ver-chip-more {
     background: none;
     border: none;
@@ -314,7 +319,7 @@ body {
 .ver-row:hover { background: #162032; }
 .ver-top { display: flex; justify-content: space-between; align-items: baseline; }
 .ver-tag { font-weight: 600; color: #60a5fa; font-size: 0.875rem; }
-.ver-date { color: #64748b; font-size: 0.75rem; }
+.ver-date { color: #8796ad; font-size: 0.75rem; }
 .ver-notes {
     display: none;
     margin-top: 0.5rem;
@@ -349,7 +354,7 @@ body {
 .proj-card-info { flex: 1; min-width: 0; }
 .proj-card-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.25rem; }
 .proj-card-meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.2rem; }
-.proj-card-sub { color: #64748b; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
+.proj-card-sub { color: #8796ad; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
 .proj-card-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
 .webhook-panel { border-top: 1px solid #334155; padding: 0.75rem 1.1rem; background: #0f172a; }
 .webhook-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid #1a2535; }
@@ -379,7 +384,7 @@ body {
 .btn-red:hover:not(:disabled) { background: #b91c1c; }
 .btn-outline { background: transparent; color: #94a3b8; border: 1px solid #334155; }
 .btn-outline:hover:not(:disabled) { background: #1e293b; color: #e2e8f0; }
-.btn-ghost { background: transparent; color: #64748b; border: none; font-size: 0.75rem; }
+.btn-ghost { background: transparent; color: #8796ad; border: none; font-size: 0.75rem; }
 .btn-ghost:hover:not(:disabled) { color: #e2e8f0; }
 
 /* ---- Form ---- */
@@ -398,11 +403,41 @@ body {
 .form-group select option { background: #0f172a; }
 
 
+/* ---- Hardening ---- */
+.app-title, .proj-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-header-left { min-width: 0; flex: 1; }
+.proj-right { flex-shrink: 0; }
+.ver-tag, .ver-chips, .username { overflow-wrap: anywhere; }
+.username { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-info { min-width: 0; }
+.webhook-url { min-width: 0; }
+.btn:focus-visible, .auth-tab:focus-visible, .ver-chip-more:focus-visible, .ver-row:focus-visible,
+.pagination button:focus-visible, a:focus-visible, .toggle input:focus-visible + .toggle-slider {
+    outline: 2px solid #60a5fa; outline-offset: 2px;
+}
+.form-group input:focus-visible, .form-group select:focus-visible, .webhook-input:focus-visible,
+.page-size-select:focus-visible { outline: 2px solid #60a5fa; outline-offset: 1px; border-color: #3b82f6; }
+@media (hover: none), (pointer: coarse) {
+    .proj-ctrl { opacity: 1; }
+    .btn, .pagination button { min-height: 40px; }
+}
+@media (max-width: 640px) {
+    .content { padding: 1rem; }
+    .app-header { padding: 0.75rem 1rem; }
+    .form-group input, .form-group select, .webhook-input, .page-size-select { font-size: 16px; }
+    .proj-right { gap: 0.25rem; }
+    .ver-count { display: none; }
+    .username { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0.01ms !important; }
+}
+
 /* ---- Misc ---- */
-.empty { text-align: center; padding: 4rem 2rem; color: #475569; }
+.empty { text-align: center; padding: 4rem 2rem; color: #8796ad; }
 .empty h3 { font-size: 0.95rem; margin-bottom: 0.4rem; }
 .empty p { font-size: 0.82rem; }
-.loading { text-align: center; padding: 3rem; color: #475569; font-size: 0.82rem; }
+.loading { text-align: center; padding: 3rem; color: #8796ad; font-size: 0.82rem; }
 </style>
 </head>
 <body>
@@ -439,7 +474,7 @@ body {
             <input type="email" name="email" required autocomplete="email">
         </div>
         <div class="form-group">
-            <label>Password <span style="color:#475569">(min 8 chars)</span></label>
+            <label>Password <span style="color:#8796ad">(min 8 chars)</span></label>
             <input type="password" name="password" required minlength="8" autocomplete="new-password">
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%" id="register-btn">Create Account</button>
@@ -456,13 +491,13 @@ body {
     <span class="app-title">Release Tracker</span>
     <div class="user-info">
         <span class="username" id="username-display"></span>
-        <button class="btn btn-ghost" onclick="openAccountPanel()" title="Account settings" style="font-size:1rem;padding:0.3rem 0.5rem">&#x2699;</button>
-        <button class="btn btn-ghost" id="notif-btn" onclick="toggleNotifications()" title="Enable push notifications" style="font-size:1rem;padding:0.3rem 0.5rem">&#x1F514;</button>
+        <button class="btn btn-ghost" onclick="openAccountPanel()" title="Account settings" aria-label="Account settings" style="font-size:1rem;padding:0.3rem 0.5rem">&#x2699;</button>
+        <button class="btn btn-ghost" id="notif-btn" onclick="toggleNotifications()" title="Enable push notifications" aria-label="Push notifications" style="font-size:1rem;padding:0.3rem 0.5rem">&#x1F514;</button>
         <button class="btn btn-ghost" onclick="doLogout()">Sign out</button>
     </div>
 </header>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="verify-banner" style="display:none;background:#422006;color:#fbbf24;border-bottom:1px solid #92400e;padding:0.6rem 1.1rem;font-size:0.85rem">
     Please verify your email address.
     <button onclick="doResendVerification()" style="background:none;border:none;color:#fbbf24;text-decoration:underline;cursor:pointer;font-size:0.85rem;margin-left:0.5rem">Resend verification email</button>
@@ -488,7 +523,7 @@ body {
             <div class="add-panel-inner">
                 <div class="add-panel-title">
                     Add Project
-                    <button class="btn btn-ghost" onclick="closeAddPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeAddPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
                 </div>
                 <form id="add-form">
                     <div class="form-group">
@@ -507,7 +542,7 @@ body {
                     <div class="form-group">
                         <label id="add-repo-label">Repository</label>
                         <input type="text" name="repo_url" id="add-repo-url" required placeholder="owner/repo" oninput="autoFillName()">
-                        <span id="add-repo-hint" style="display:block;font-size:0.74rem;color:#475569;margin-top:0.3rem"></span>
+                        <span id="add-repo-hint" style="display:block;font-size:0.74rem;color:#8796ad;margin-top:0.3rem"></span>
                     </div>
                     <div class="form-group">
                         <label>Display name</label>
@@ -521,7 +556,7 @@ body {
             <div class="settings-panel-inner">
                 <div class="add-panel-title">
                     <span id="settings-panel-title">Settings</span>
-                    <button class="btn btn-ghost" onclick="closeSettingsPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeSettingsPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
                 </div>
                 <div id="settings-panel-body"></div>
             </div>
@@ -530,7 +565,7 @@ body {
             <div class="account-panel-inner">
                 <div class="add-panel-title">
                     Account Settings
-                    <button class="btn btn-ghost" onclick="closeAccountPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeAccountPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
                 </div>
                 <div id="account-panel-body"></div>
             </div>
@@ -751,13 +786,13 @@ function loadAccountPanel() {
     // Show loading indicator
     body.textContent = '';
     var loading = document.createElement('div');
-    loading.style.cssText = 'font-size:0.85rem;color:#64748b';
+    loading.style.cssText = 'font-size:0.85rem;color:#8796ad';
     loading.textContent = 'Loading...';
     body.appendChild(loading);
 
     Promise.all([
-        fetch('/api/account-settings').then(function(r) { return r.json(); }),
-        fetch('/api/gitlab-settings').then(function(r) { return r.json(); })
+        fetch('/api/account-settings').then(apiJSON),
+        fetch('/api/gitlab-settings').then(apiJSON)
     ])
         .then(function(res) {
             var settings = res[0];
@@ -773,7 +808,7 @@ function loadAccountPanel() {
             var userSection = document.createElement('div');
             userSection.style.marginBottom = '1rem';
             var userLabel = document.createElement('div');
-            userLabel.style.cssText = 'font-size:0.8rem;color:#64748b;margin-bottom:0.25rem';
+            userLabel.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-bottom:0.25rem';
             userLabel.textContent = 'Email';
             var userValue = document.createElement('div');
             userValue.style.fontSize = '0.9rem';
@@ -808,7 +843,7 @@ function loadAccountPanel() {
                 var rssSection = document.createElement('div');
                 rssSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
                 var rssLabel = document.createElement('div');
-                rssLabel.style.cssText = 'font-size:0.8rem;color:#64748b;margin-bottom:0.4rem';
+                rssLabel.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-bottom:0.4rem';
                 rssLabel.textContent = 'RSS Feed';
                 rssSection.appendChild(rssLabel);
                 var rssRow = document.createElement('div');
@@ -840,7 +875,7 @@ function loadAccountPanel() {
             var glSection = document.createElement('div');
             glSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
             var glLabel = document.createElement('div');
-            glLabel.style.cssText = 'font-size:0.8rem;color:#64748b;margin-bottom:0.4rem';
+            glLabel.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-bottom:0.4rem';
             glLabel.textContent = 'GitLab Sync';
             glSection.appendChild(glLabel);
 
@@ -871,7 +906,7 @@ function loadAccountPanel() {
             glSection.appendChild(glGroupInput);
 
             var glGroupHint = document.createElement('div');
-            glGroupHint.style.cssText = 'font-size:0.72rem;color:#64748b;margin:-0.2rem 0 0.4rem';
+            glGroupHint.style.cssText = 'font-size:0.72rem;color:#8796ad;margin:-0.2rem 0 0.4rem';
             glGroupHint.textContent = 'Mirrors go to <group>/<upstream-owner>/<repo> instead of your personal namespace. The group must already exist in GitLab.';
             glSection.appendChild(glGroupHint);
 
@@ -927,7 +962,7 @@ function toggleEmailDigest(checkbox) {
         toast('Settings saved', 'ok');
     }).catch(function() {
         checkbox.checked = !checkbox.checked;
-        toast('Failed to save settings', 'error');
+        toast('Failed to save settings', 'err');
     });
 }
 
@@ -979,7 +1014,18 @@ function onAwesomeToggle(checkbox) {
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') { closeAddPanel(); closeSettingsPanel(); closeAccountPanel(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('ver-row')) {
+        e.preventDefault();
+        toggleNotes(e.target);
+    }
 });
+
+// Parse a JSON API response; expired session returns to sign-in, other failures throw.
+function apiJSON(r) {
+    if (r.status === 401) { doLogout(); throw new Error('Session expired. Please sign in again.'); }
+    if (!r.ok) throw new Error('Request failed (' + r.status + ')');
+    return r.json();
+}
 
 // ---- Releases tab ----
 function buildReleasesHTML(releases, projects) {
@@ -1012,8 +1058,8 @@ function buildReleasesHTML(releases, projects) {
             var notes = r.release_notes || r.description || '';
             var vlink = '<a class="ver-chip-link" href="' + esc(r.url) + '" target="_blank"' +
                 (notes ? ' title="' + esc(notes) + '"' : '') + '>' + esc(r.version) + '</a>';
-            return fmtAge(r.published_at) + ': ' + vlink +
-                (i < visible.length - 1 || hidden.length > 0 ? ',&nbsp; ' : '');
+            return '<span class="ver-chip">' + fmtAge(r.published_at) + ': ' + vlink +
+                (i < visible.length - 1 || hidden.length > 0 ? ',' : '') + '</span>';
         }).join('');
 
         var moreBtn = hidden.length > 0
@@ -1023,7 +1069,7 @@ function buildReleasesHTML(releases, projects) {
 
         var allRows = rels.map(function(r) {
             var notes = r.release_notes || r.description || '';
-            return '<div class="ver-row" onclick="toggleNotes(this)">' +
+            return '<div class="ver-row" role="button" tabindex="0" onclick="toggleNotes(this)">' +
                 '<div class="ver-top">' +
                     '<span class="ver-tag">' + esc(r.version) + '</span>' +
                     '<span class="ver-date">' + fmtAge(r.published_at) + '</span>' +
@@ -1043,10 +1089,10 @@ function buildReleasesHTML(releases, projects) {
                     backupLink +
                 '</div>' +
                 '<div class="proj-right">' +
-                    '<button class="btn btn-ghost proj-ctrl" title="Refresh" ' +
+                    '<button class="btn btn-ghost proj-ctrl" title="Refresh" aria-label="Refresh ' + esc(pname) + '" ' +
                         'data-id="' + esc(pid) + '" ' +
                         'onclick="doRefresh(this)">&#x21BB;</button>' +
-                    '<button class="btn btn-ghost proj-ctrl" title="Settings" ' +
+                    '<button class="btn btn-ghost proj-ctrl" title="Settings" aria-label="Settings for ' + esc(pname) + '" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
                         'data-push="' + (proj && proj.push_enabled ? '1' : '0') + '" ' +
                         'data-gitlab-enabled="' + (proj && proj.gitlab_sync_enabled ? '1' : '0') + '" ' +
@@ -1054,7 +1100,7 @@ function buildReleasesHTML(releases, projects) {
                         'data-gitlab-error="' + esc((proj && proj.last_gitlab_sync_error) || '') + '" ' +
                         'data-email-immediate="' + (proj && proj.email_immediate ? '1' : '0') + '" ' +
                         'onclick="openSettingsPanel(this)">&#x2699;</button>' +
-                    '<button class="btn btn-ghost proj-ctrl" title="Delete" style="color:#f87171" ' +
+                    '<button class="btn btn-ghost proj-ctrl" title="Delete" aria-label="Delete ' + esc(pname) + '" style="color:#f87171" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
                         'onclick="doDelete(this)">&#x2715;</button>' +
                     '<span class="ver-count">' + rels.length + ' version' + (rels.length === 1 ? '' : 's') + '</span>' +
@@ -1129,8 +1175,8 @@ function toggleNotes(row) {
 function loadReleases() {
     document.getElementById('releases-root').innerHTML = '<div class="loading">Loading...</div>';
     Promise.all([
-        fetch('/api/releases').then(function(r) { return r.json(); }),
-        fetch('/api/projects').then(function(r) { return r.json(); })
+        fetch('/api/releases').then(apiJSON),
+        fetch('/api/projects').then(apiJSON)
     ]).then(function(res) {
         allReleases = res[0] || [];
         allProjects = res[1] || [];
@@ -1148,7 +1194,8 @@ function loadReleases() {
             }
         }
     }).catch(function(err) {
-        document.getElementById('releases-root').innerHTML = '<div class="empty"><h3>Failed to load</h3></div>';
+        document.getElementById('releases-root').innerHTML = '<div class="empty"><h3>Could not load releases</h3><p>' + esc(err.message) + '</p>' +
+            '<button class="btn btn-outline" style="margin-top:0.75rem" onclick="loadReleases()">Try again</button></div>';
         console.error('loadReleases:', err);
     });
 }
@@ -1179,9 +1226,9 @@ function closeSettingsPanel() {
 
 function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImmediate) {
     var body = document.getElementById('settings-panel-body');
-    body.innerHTML = '<div style="font-size:0.85rem;color:#64748b">Loading...</div>';
+    body.innerHTML = '<div style="font-size:0.85rem;color:#8796ad">Loading...</div>';
     fetch('/api/webhooks?repo_id=' + encodeURIComponent(id))
-        .then(function(r) { return r.json(); })
+        .then(apiJSON)
         .then(function(hooks) {
             body.innerHTML = renderSettingsPanelBody(id, pushEnabled, hooks || [], glEnabled, glFreq, glError);
             addEmailToggleToPanel(id, !!emailImmediate);
@@ -1376,7 +1423,7 @@ function buildProjectsHTML(projects) {
                     '<div class="proj-card-meta">' +
                         '<span class="badge ' + esc(p.platform) + '">' + esc(p.platform) + '</span>' +
                         backupLink +
-                        '<span style="color:#64748b;font-size:0.75rem">' + sub + '</span>' +
+                        '<span style="color:#8796ad;font-size:0.75rem">' + sub + '</span>' +
                     '</div>' +
                     '<div class="proj-card-sub">' + esc(p.repo_url) + '</div>' +
                 '</div>' +
@@ -1471,22 +1518,22 @@ function toggleWebhooks(btn) {
 function loadWebhooks(repoID) {
     var panel = document.getElementById('whpanel-' + repoID);
     if (!panel) return;
-    panel.innerHTML = '<div style="font-size:0.8rem;color:#475569;padding:0.25rem 0">Loading...</div>';
+    panel.innerHTML = '<div style="font-size:0.8rem;color:#8796ad;padding:0.25rem 0">Loading...</div>';
     fetch('/api/webhooks?repo_id=' + encodeURIComponent(repoID))
-        .then(function(r) { return r.json(); })
+        .then(apiJSON)
         .then(function(hooks) { panel.innerHTML = renderWebhookPanel(repoID, hooks || []); })
         .catch(function() { panel.innerHTML = '<div style="color:#f87171;font-size:0.8rem">Failed to load webhooks.</div>'; });
 }
 
 function renderWebhookPanel(repoID, hooks) {
     var list = hooks.length ? hooks.map(function(h) {
-        var label = h.has_secret ? ' <span style="color:#64748b;font-size:0.7rem">[signed]</span>' : '';
+        var label = h.has_secret ? ' <span style="color:#8796ad;font-size:0.7rem">[signed]</span>' : '';
         return '<div class="webhook-item">' +
             '<span class="webhook-url">' + esc(h.url) + label + '</span>' +
             '<button class="btn btn-ghost" style="color:#f87171;font-size:0.75rem;padding:0.2rem 0.5rem" ' +
                 'data-wid="' + esc(h.id) + '" data-repo="' + esc(repoID) + '" onclick="doDeleteWebhook(this)">Remove</button>' +
         '</div>';
-    }).join('') : '<div style="font-size:0.8rem;color:#475569;padding:0.25rem 0 0.5rem">No webhooks configured.</div>';
+    }).join('') : '<div style="font-size:0.8rem;color:#8796ad;padding:0.25rem 0 0.5rem">No webhooks configured.</div>';
 
     return '<div>' + list + '</div>' +
         '<form class="webhook-add" onsubmit="doAddWebhook(event,\'' + esc(repoID) + '\')">' +
@@ -1517,8 +1564,9 @@ function doDeleteWebhook(btn) {
     var repoID = btn.dataset.repo;
     fetch('/api/webhooks?id=' + encodeURIComponent(wid), {method: 'DELETE'})
         .then(function(r) {
-            if (r.ok) { loadWebhooks(repoID); toast('Webhook removed.'); }
-        });
+            if (!r.ok) throw new Error('failed');
+            loadWebhooks(repoID); toast('Webhook removed.');
+        }).catch(function() { toast('Could not remove webhook.', 'err'); });
 }
 
 // ---- Platform autofill ----

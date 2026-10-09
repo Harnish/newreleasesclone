@@ -14,6 +14,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **GitLab sync**: Register your own GitLab instance + API token (Account Settings), then opt any GitHub/GitLab project into a daily/weekly/monthly mirror push. Optional "Awesome" README, grouped by platform, auto-generated and pushed to a GitLab project under your namespace
 - **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
 - **Full release notes**: GitHub/GitLab release bodies captured and expandable in the UI
+- **Accessible UI**: keyboard focus rings, screen-reader labels, AA-contrast text, touch-friendly controls on phones
 - **SQLite persistence**: All data stored in `data/newreleases.db`
 
 ## Running
