@@ -57,7 +57,7 @@ The HTML/CSS/JS frontend is embedded as string constants in `main.go` — no bui
 
 **Port:** 8080 (hardcoded in `main.go`).
 
-**Security:** webhook and GitLab outbound requests go through the SSRF-guarded `gitLabHTTPTransport` (`GITLAB_ALLOWED_HOSTS` allowlists internal hosts). Login/register are rate limited in-memory (`tooMany`).
+**Security:** webhook and GitLab outbound requests go through the SSRF-guarded `gitLabHTTPTransport` (`GITLAB_ALLOWED_HOSTS` allowlists internal hosts). Login/register are rate limited in-memory (`allow`).
 
 **Max releases stored per project:** 50 (enforced in `AddRelease`).
 

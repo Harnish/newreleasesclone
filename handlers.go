@@ -138,29 +138,40 @@ var (
 	attempts  = map[string][]time.Time{}
 )
 
-// tooMany reports whether key already has max recorded attempts in window.
+// allow records an attempt for key and reports whether it is within max per
+// window. Check and record share one lock, so concurrent requests can't race
+// past the limit.
 // ponytail: in-memory, per-process, keyed on RemoteAddr (a reverse proxy
 // collapses all clients to one IP); move to the DB / trusted XFF if that bites.
-func tooMany(key string, max int, window time.Duration) bool {
+func allow(key string, max int, window time.Duration) bool {
 	attemptMu.Lock()
 	defer attemptMu.Unlock()
-	cutoff := time.Now().Add(-window)
+	now := time.Now()
+	cutoff := now.Add(-window)
+	if len(attempts) > 10000 { // sweep so spoofed keys can't grow the map forever
+		for k, ts := range attempts {
+			if len(ts) == 0 || ts[len(ts)-1].Before(cutoff) {
+				delete(attempts, k)
+			}
+		}
+	}
 	recent := attempts[key][:0]
 	for _, t := range attempts[key] {
 		if t.After(cutoff) {
 			recent = append(recent, t)
 		}
 	}
-	attempts[key] = recent
-	if len(recent) == 0 {
-		delete(attempts, key)
+	if len(recent) >= max {
+		attempts[key] = recent
+		return false
 	}
-	return len(recent) >= max
+	attempts[key] = append(recent, now)
+	return true
 }
 
-func recordAttempt(key string) {
+func forgetAttempts(key string) {
 	attemptMu.Lock()
-	attempts[key] = append(attempts[key], time.Now())
+	delete(attempts, key)
 	attemptMu.Unlock()
 }
 
@@ -188,11 +199,10 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	regKey := "reg|" + clientIP(r)
-	if tooMany(regKey, 10, time.Hour) {
+	if !allow(regKey, 10, time.Hour) {
 		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
-	recordAttempt(regKey)
 	if len(req.Password) < 8 {
 		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
@@ -241,17 +251,21 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if len(req.Email) > 254 {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
 	loginKey := "login|" + clientIP(r) + "|" + req.Email
-	if tooMany(loginKey, 10, 15*time.Minute) {
+	if !allow(loginKey, 10, 15*time.Minute) {
 		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
 	user, err := store.AuthenticateUser(req.Email, req.Password)
 	if err != nil {
-		recordAttempt(loginKey)
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
+	forgetAttempts(loginKey)
 	sessionID := store.CreateSession(user.ID)
 	setSessionCookie(w, r, sessionID)
 	w.Header().Set("Content-Type", "application/json")
