@@ -31,10 +31,10 @@ docker-compose up
 
 ## Architecture
 
-`main.go` (~1,300 lines) is the entire backend — no packages, no external frameworks.
+Single `main` package, split by concern: `main.go` (wiring/routes), `handlers.go` (HTTP), `store.go` (SQLite + migrations), `fetchers.go` (platform APIs), `ui.go` (embedded frontend), `email.go`, `scheduler.go`, `gitlab*.go`/`gitmirror.go`/`awesome.go` (GitLab sync), `models.go`.
 
 **Core types:**
-- `Store` — thread-safe state container using `sync.RWMutex`; holds projects, releases, and refresh timestamps; persists to `state.json`
+- `Store` — thread-safe state container using `sync.RWMutex`; wraps the SQLite DB (users, sessions, repos, releases, webhooks, settings)
 - `Project` — a tracked repo/package (ID, name, platform, URL, refresh stats)
 - `Release` — a version entry with truncated description (200 chars) and full `ReleaseNotes`
 
@@ -55,7 +55,9 @@ The HTML/CSS/JS frontend is embedded as string constants in `main.go` — no bui
 
 **Release IDs** are platform-prefixed (`gh_<id>`, `npm_<version>`, `docker_<tag>`) to prevent duplicates on re-fetch.
 
-**Port:** 8080 (hardcoded near EOF of `main.go`).
+**Port:** 8080 (hardcoded in `main.go`).
+
+**Security:** webhook and GitLab outbound requests go through the SSRF-guarded `gitLabHTTPTransport` (`GITLAB_ALLOWED_HOSTS` allowlists internal hosts). Login/register are rate limited in-memory (`tooMany`).
 
 **Max releases stored per project:** 50 (enforced in `AddRelease`).
 

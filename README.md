@@ -10,7 +10,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
 - **Browser push notifications**: Click 🔔 in the header to subscribe; notifications fire when a new release is detected on any tracked repo
 - **Email notifications**: Opt-in per project — a daily digest of the previous day's releases, and/or an immediate plain-text email the moment a new release is detected (requires SMTP configured and a verified email)
-- **Webhooks**: Per-project outbound webhooks with optional HMAC-SHA256 signing; managed inline from the Projects tab
+- **Webhooks**: Per-project outbound webhooks with optional HMAC-SHA256 signing; managed inline from the Projects tab. Delivery uses the same SSRF guard as GitLab sync (private/loopback addresses refused, redirects not followed)
 - **GitLab sync**: Register your own GitLab instance + API token (Account Settings), then opt any GitHub/GitLab project into a daily/weekly/monthly mirror push. Optional "Awesome" README, grouped by platform, auto-generated and pushed to a GitLab project under your namespace
 - **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
 - **Full release notes**: GitHub/GitLab release bodies captured and expandable in the UI

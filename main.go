@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 var (
@@ -54,5 +55,8 @@ func main() {
 	http.HandleFunc("/api/project-gitlab-sync/sync-now", requireAuth(handleProjectGitLabSyncNow))
 
 	fmt.Println("Release Tracker running on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// Fetchers use http.Get (DefaultClient), which has no timeout by default.
+	http.DefaultClient.Timeout = 30 * time.Second
+	srv := &http.Server{Addr: ":8080", ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second}
+	log.Fatal(srv.ListenAndServe())
 }

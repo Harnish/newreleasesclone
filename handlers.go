@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -132,6 +133,45 @@ func handleResendVerification(w http.ResponseWriter, r *http.Request, userID str
 	w.Write([]byte(`{"ok":true}`))
 }
 
+var (
+	attemptMu sync.Mutex
+	attempts  = map[string][]time.Time{}
+)
+
+// tooMany reports whether key already has max recorded attempts in window.
+// ponytail: in-memory, per-process, keyed on RemoteAddr (a reverse proxy
+// collapses all clients to one IP); move to the DB / trusted XFF if that bites.
+func tooMany(key string, max int, window time.Duration) bool {
+	attemptMu.Lock()
+	defer attemptMu.Unlock()
+	cutoff := time.Now().Add(-window)
+	recent := attempts[key][:0]
+	for _, t := range attempts[key] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+	attempts[key] = recent
+	if len(recent) == 0 {
+		delete(attempts, key)
+	}
+	return len(recent) >= max
+}
+
+func recordAttempt(key string) {
+	attemptMu.Lock()
+	attempts[key] = append(attempts[key], time.Now())
+	attemptMu.Unlock()
+}
+
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
 // POST /api/register
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -147,6 +187,12 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	regKey := "reg|" + clientIP(r)
+	if tooMany(regKey, 10, time.Hour) {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+	recordAttempt(regKey)
 	if len(req.Password) < 8 {
 		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
@@ -174,7 +220,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sessionID := store.CreateSession(user.ID)
-	setSessionCookie(w, sessionID)
+	setSessionCookie(w, r, sessionID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(user)
@@ -195,13 +241,19 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	loginKey := "login|" + clientIP(r) + "|" + req.Email
+	if tooMany(loginKey, 10, 15*time.Minute) {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
 	user, err := store.AuthenticateUser(req.Email, req.Password)
 	if err != nil {
+		recordAttempt(loginKey)
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 	sessionID := store.CreateSession(user.ID)
-	setSessionCookie(w, sessionID)
+	setSessionCookie(w, r, sessionID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }
@@ -219,12 +271,13 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func setSessionCookie(w http.ResponseWriter, sessionID string) {
+func setSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   30 * 24 * 3600,
 	})

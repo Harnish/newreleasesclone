@@ -1,1 +1,11 @@
 .worktrees/
+
+# Local artifacts
+/newreleases
+data/
+state.json
+graft/
+.mcp.json
+.superpowers/
+.claude.old-notes.md
+.ignore

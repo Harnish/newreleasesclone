@@ -773,7 +773,12 @@ func (s *Store) sendWebhooks(repoID string, project Project, newReleases []Relea
 		"releases": relPayloads,
 	})
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// Reuse the GitLab SSRF-guarded transport: webhook URLs are user-supplied.
+	client := &http.Client{
+		Timeout:       10 * time.Second,
+		Transport:     gitLabHTTPTransport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	for _, entry := range hooks {
 		req, err := http.NewRequest(http.MethodPost, entry.wh.URL, bytes.NewReader(body))
 		if err != nil {
