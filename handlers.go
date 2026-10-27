@@ -136,6 +136,12 @@ func handleResendVerification(w http.ResponseWriter, r *http.Request, userID str
 var (
 	attemptMu sync.Mutex
 	attempts  = map[string][]time.Time{}
+	lastSweep time.Time
+)
+
+const (
+	maxAttemptWindow = time.Hour // longest window passed to allow()
+	maxAttemptKeys   = 10000
 )
 
 // allow records an attempt for key and reports whether it is within max per
@@ -148,12 +154,19 @@ func allow(key string, max int, window time.Duration) bool {
 	defer attemptMu.Unlock()
 	now := time.Now()
 	cutoff := now.Add(-window)
-	if len(attempts) > 10000 { // sweep so spoofed keys can't grow the map forever
+	// Sweep at most once a minute, against the longest window in use, so one
+	// caller's short window can't evict another policy's live entries.
+	if now.Sub(lastSweep) > time.Minute {
+		lastSweep = now
 		for k, ts := range attempts {
-			if len(ts) == 0 || ts[len(ts)-1].Before(cutoff) {
+			if len(ts) == 0 || ts[len(ts)-1].Before(now.Add(-maxAttemptWindow)) {
 				delete(attempts, k)
 			}
 		}
+	}
+	// Hard cap: fail closed for new keys when the map is full.
+	if _, known := attempts[key]; !known && len(attempts) >= maxAttemptKeys {
+		return false
 	}
 	recent := attempts[key][:0]
 	for _, t := range attempts[key] {
@@ -253,6 +266,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if len(req.Email) > 254 {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
+	// Per-IP cap bounds how many per-email keys one client can create.
+	if !allow("loginip|"+clientIP(r), 50, 15*time.Minute) {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
 	loginKey := "login|" + clientIP(r) + "|" + req.Email

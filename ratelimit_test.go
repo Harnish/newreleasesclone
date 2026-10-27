@@ -20,3 +20,17 @@ func TestAllow(t *testing.T) {
 		t.Fatal("expected allow after forget")
 	}
 }
+
+func TestAllowKeyCap(t *testing.T) {
+	attemptMu.Lock()
+	saved := attempts
+	attempts = map[string][]time.Time{}
+	for i := 0; i < maxAttemptKeys; i++ {
+		attempts[string(rune('a'))+time.Duration(i).String()] = []time.Time{time.Now()}
+	}
+	attemptMu.Unlock()
+	defer func() { attemptMu.Lock(); attempts = saved; attemptMu.Unlock() }()
+	if allow("brand-new-key", 3, time.Minute) {
+		t.Fatal("expected new key rejected when map is full")
+	}
+}
