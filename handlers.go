@@ -48,7 +48,8 @@ func requestBaseURL(r *http.Request) string {
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {
-	tmpl.Execute(w, nil)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(indexHTML)
 }
 
 // GET /api/me — returns the current user or 401.

@@ -31,7 +31,7 @@ docker-compose up
 
 ## Architecture
 
-Single `main` package, split by concern: `main.go` (wiring/routes), `handlers.go` (HTTP), `store.go` (SQLite + migrations), `fetchers.go` (platform APIs), `ui.go` (embedded frontend), `email.go`, `scheduler.go`, `gitlab*.go`/`gitmirror.go`/`awesome.go` (GitLab sync), `models.go`.
+Single `main` package, split by concern: `main.go` (wiring/routes), `handlers.go` (HTTP), `store.go` (SQLite + migrations), `fetchers.go` (platform APIs), `ui.go` (`go:embed` of `web/`), `email.go`, `scheduler.go`, `gitlab*.go`/`gitmirror.go`/`awesome.go` (GitLab sync), `models.go`.
 
 **Core types:**
 - `Store` — thread-safe state container using `sync.RWMutex`; wraps the SQLite DB (users, sessions, repos, releases, webhooks, settings)
@@ -43,7 +43,7 @@ Single `main` package, split by concern: `main.go` (wiring/routes), `handlers.go
 - `GET /api/releases`
 - `POST /api/refresh?id=<id>`, `GET /api/refresh-check`
 
-The HTML/CSS/JS frontend is embedded as string constants in `main.go` — no build step, no bundler.
+The HTML/CSS/JS frontend lives in `web/` (`index.html`, `app.css`, `app.js`), embedded with `go:embed` and served at `/` and `/static/` — no build step, no bundler. Edit those files directly; they are plain browser JS (inline `onclick=` handlers rely on globals).
 
 **Refresh system:** Projects are "stale" after 30 minutes. `GET /api/refresh-check` triggers background goroutines for all stale projects. All `RefreshProject` calls are non-blocking (`go store.RefreshProject(...)`). After each refresh, `SaveState()` persists to `state.json`.
 

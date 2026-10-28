@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-buildah bud -f Dockerfile -t registry.whiskeyonthe.rocks/newreleases/newreleases:dev
+buildah bud --build-arg GIT_SHA="$(git rev-parse --short HEAD)" -f Dockerfile -t registry.whiskeyonthe.rocks/newreleases/newreleases:dev
 buildah push registry.whiskeyonthe.rocks/newreleases/newreleases:dev
 
 date

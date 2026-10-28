@@ -7,6 +7,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub, Helm (Artifact Hub & custom repos)
 - **User accounts**: Register/login with session-based auth; each user tracks their own set of projects
 - **Shared release data**: Two users adding the same repo share one set of fetched releases
+- **Build info**: the running build's commit SHA is shown in the bottom-right corner (set via the `GIT_SHA` build arg; `docker-compose` reads it from your environment, e.g. `GIT_SHA=$(git rev-parse --short HEAD) docker-compose up --build`)
 - **Sorting**: Order projects by latest release (default), date added, or name; the choice is remembered in your browser and applies across pages
 - **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
 - **Browser push notifications**: Click 🔔 in the header to subscribe; notifications fire when a new release is detected on any tracked repo
@@ -125,7 +126,8 @@ Uses a `local-path` PVC to persist `data/` across pod restarts.
 | `store.go` | SQLite layer — users, sessions, repos, releases |
 | `fetchers.go` | Per-platform release fetchers |
 | `models.go` | `User`, `Project`, `Release`, `GitLabSettings`, `GitLabSyncTarget` structs |
-| `ui.go` | Embedded HTML/CSS/JS frontend |
+| `ui.go` | `go:embed` wiring + `/static/` handler for the frontend |
+| `web/` | Frontend source: `index.html`, `app.css`, `app.js` (embedded into the binary) |
 | `gitlabclient.go` | GitLab REST v4 client (project create/lookup, authenticated push URL) |
 | `gitmirror.go` | Ephemeral `git clone --mirror` / push primitives (`os/exec`, no persistent clone dir) |
 | `gitlabsync.go` | Per-project sync orchestration |

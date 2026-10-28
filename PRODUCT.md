@@ -19,7 +19,7 @@ One self-hosted tracker for many platforms, with the user owning the data. Notif
 Multi-user with session auth; email is the user ID and must be verified. Releases are shared between users who track the same repo. Stale projects (>30 min) refresh in the background on page load. SMTP is optional; email features are hidden when unconfigured.
 
 ## Capabilities and Constraints
-- Go backend, SQLite (`modernc.org/sqlite`), frontend embedded as strings in `ui.go`; no build step or bundler.
+- Go backend, SQLite (`modernc.org/sqlite`), frontend in `web/` (HTML/CSS/JS) compiled in via `go:embed`; no build step or bundler.
 - Per-project settings: push, email, webhooks, GitLab sync.
 - Releases list: 5 most recent inline, expandable; paginated projects (5/10/20).
 - Open decisions: prerelease filtering, sort options, project icons, wide-screen layout (see TODO.md).

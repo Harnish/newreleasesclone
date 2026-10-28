@@ -84,7 +84,7 @@ build_with_buildah() {
     # Step 3: Build Docker image with Buildah
     print_step "Building image with Buildah: ${FULL_IMAGE}"
     
-    if buildah bud -t "${FULL_IMAGE}" -f Dockerfile .; then
+    if buildah bud --build-arg GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo dev)" -t "${FULL_IMAGE}" -f Dockerfile .; then
         print_success "Buildah image built successfully"
     else
         print_error "Buildah build failed"
@@ -141,7 +141,7 @@ build_with_podman() {
     # Step 3: Build Docker image with Podman
     print_step "Building image with Podman: ${FULL_IMAGE}"
     
-    if podman build -t "${FULL_IMAGE}" -f Dockerfile .; then
+    if podman build --build-arg GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo dev)" -t "${FULL_IMAGE}" -f Dockerfile .; then
         print_success "Podman image built successfully"
     else
         print_error "Podman build failed"
