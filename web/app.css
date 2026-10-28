@@ -428,3 +428,5 @@ body {
 .empty p { font-size: 0.82rem; }
 .loading { text-align: center; padding: 3rem; color: #8796ad; font-size: 0.82rem; }
 .build-info { position: fixed; right: 0.6rem; bottom: 0.4rem; font-size: 0.7rem; color: #8796ad; pointer-events: none; }
+.pre-tag { display: inline-block; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; padding: 0 0.3rem; border-radius: 3px; background: #422006; color: #fbbf24; vertical-align: baseline; }
+.settings-hint { font-size: 0.75rem; color: #8796ad; margin-top: 0.3rem; }

@@ -20,6 +20,7 @@ type Release struct {
 	PublishedAt  time.Time `json:"published_at"`
 	Description  string    `json:"description"`
 	ReleaseNotes string    `json:"release_notes"`
+	Prerelease   bool      `json:"prerelease"`
 }
 
 type Webhook struct {
@@ -38,6 +39,7 @@ type Project struct {
 	RefreshCount        int       `json:"refresh_count"`
 	PushEnabled         bool      `json:"push_enabled"`
 	EmailImmediate      bool      `json:"email_immediate"`
+	IncludePrereleases  bool      `json:"include_prereleases"`
 	GitLabSyncEnabled   bool      `json:"gitlab_sync_enabled"`
 	GitLabSyncFrequency string    `json:"gitlab_sync_frequency,omitempty"`
 	LastGitLabSyncAt    time.Time `json:"last_gitlab_sync_at,omitempty"`

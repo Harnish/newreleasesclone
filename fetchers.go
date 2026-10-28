@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -47,7 +48,7 @@ func fetchGitHubReleases(project Project) []Release {
 
 	var releases []Release
 	for _, gh := range ghReleases {
-		if gh.Draft || gh.Prerelease {
+		if gh.Draft {
 			continue
 		}
 		pubTime, _ := time.Parse(time.RFC3339, gh.PublishedAt)
@@ -60,27 +61,8 @@ func fetchGitHubReleases(project Project) []Release {
 			PublishedAt:  pubTime,
 			Description:  truncate(gh.Body, 200),
 			ReleaseNotes: gh.Body,
+			Prerelease:   gh.Prerelease,
 		})
-	}
-
-	// If no stable releases, fall back to including prereleases
-	if len(releases) == 0 {
-		for _, gh := range ghReleases {
-			if gh.Draft {
-				continue
-			}
-			pubTime, _ := time.Parse(time.RFC3339, gh.PublishedAt)
-			releases = append(releases, Release{
-				ID:           fmt.Sprintf("gh_%d", gh.ID),
-				Name:         project.Name,
-				Version:      gh.TagName,
-				Platform:     "github",
-				URL:          gh.HtmlUrl,
-				PublishedAt:  pubTime,
-				Description:  truncate(gh.Body, 200),
-				ReleaseNotes: gh.Body,
-			})
-		}
 	}
 
 	return releases
@@ -148,6 +130,7 @@ func fetchNPMVersions(project Project) []Release {
 			URL:         fmt.Sprintf("https://www.npmjs.com/package/%s/v/%s", pkgName, v),
 			PublishedAt: pubTime,
 			Description: "NPM Package Version",
+			Prerelease:  isPrerelease(v),
 		})
 	}
 
@@ -207,6 +190,7 @@ func fetchPyPIReleases(project Project) []Release {
 			URL:         fmt.Sprintf("https://pypi.org/project/%s/%s/", pkgName, v),
 			PublishedAt: pubTime,
 			Description: "PyPI Package Version",
+			Prerelease:  isPrerelease(v),
 		})
 	}
 
@@ -262,6 +246,7 @@ func fetchDockerTags(project Project) []Release {
 			URL:         fmt.Sprintf("https://hub.docker.com/r/%s/tags", repo),
 			PublishedAt: pubTime,
 			Description: "Docker Image Tag",
+			Prerelease:  isPrerelease(tag.Name),
 		})
 	}
 
@@ -292,6 +277,7 @@ func fetchGitLabReleases(project Project) []Release {
 		Description string `json:"description"`
 		CreatedAt   string `json:"created_at"`
 		WebUrl      string `json:"web_url"`
+		Upcoming    bool   `json:"upcoming_release"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&glReleases); err != nil {
@@ -311,10 +297,25 @@ func fetchGitLabReleases(project Project) []Release {
 			PublishedAt:  pubTime,
 			Description:  truncate(gl.Description, 200),
 			ReleaseNotes: gl.Description,
+			Prerelease:   gl.Upcoming || isPrerelease(gl.TagName),
 		})
 	}
 
 	return releases
+}
+
+var (
+	// prereleaseWord: alpha/beta/rc/... delimited by non-letters, e.g. "1.0.0-rc.1", "2.0-beta", "nightly".
+	prereleaseWord = regexp.MustCompile(`(?i)(^|[^a-z])(alpha|beta|rc|pre|preview|dev|canary|nightly|snapshot|next|unstable)([^a-z]|$)`)
+	// prereleaseShort: PEP 440 style "1.0a1", "1.0b2", "1.0rc1".
+	prereleaseShort = regexp.MustCompile(`(?i)\d(a|b|rc)\d+($|[.\-+_])`)
+)
+
+// isPrerelease guesses from a version/tag string for platforms whose API has
+// no prerelease flag (npm, PyPI, Docker, Helm repos). Docker tags like
+// "1.2.3-alpine" or "latest" are deliberately not treated as prereleases.
+func isPrerelease(version string) bool {
+	return prereleaseWord.MatchString(version) || prereleaseShort.MatchString(version)
 }
 
 func truncate(s string, maxLen int) string {
@@ -362,23 +363,24 @@ func fetchHelmArtifactHub(project Project) []Release {
 	}
 
 	type versionEntry struct {
-		version string
-		ts      int64
+		version    string
+		ts         int64
+		prerelease bool
 	}
 
+	// Up to 10 stable plus 5 prereleases, so a run of rc's can't crowd stable out.
 	var stable []versionEntry
+	nStable, nPre := 0, 0
 	for _, v := range pkgData.AvailableVersions {
-		if !v.Prerelease {
-			stable = append(stable, versionEntry{v.Version, v.TS})
+		if v.Prerelease {
+			if nPre < 5 {
+				nPre++
+				stable = append(stable, versionEntry{v.Version, v.TS, true})
+			}
+		} else if nStable < 10 {
+			nStable++
+			stable = append(stable, versionEntry{v.Version, v.TS, false})
 		}
-	}
-	if len(stable) == 0 {
-		for _, v := range pkgData.AvailableVersions {
-			stable = append(stable, versionEntry{v.Version, v.TS})
-		}
-	}
-	if len(stable) > 10 {
-		stable = stable[:10]
 	}
 
 	var releases []Release
@@ -416,6 +418,7 @@ func fetchHelmArtifactHub(project Project) []Release {
 			URL:         project.RepoURL,
 			PublishedAt: time.Unix(v.ts, 0),
 			Description: truncate(pkgData.Description, 200),
+			Prerelease:  v.prerelease,
 		})
 	}
 
@@ -501,6 +504,7 @@ func fetchHelmRepo(project Project) []Release {
 			URL:         url,
 			PublishedAt: pubTime,
 			Description: "Helm Chart",
+			Prerelease:  isPrerelease(e.Version),
 		})
 	}
 

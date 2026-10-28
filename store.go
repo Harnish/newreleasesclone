@@ -326,6 +326,18 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	if version < 14 {
+		if _, err := db.Exec(`ALTER TABLE releases ADD COLUMN is_prerelease INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("failed to migrate to v14 (is_prerelease): %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN include_prereleases INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("failed to migrate to v14 (include_prereleases): %w", err)
+		}
+		if _, err := db.Exec("PRAGMA user_version = 14"); err != nil {
+			return fmt.Errorf("failed to set schema version: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -386,20 +398,23 @@ func (s *Store) sendPushNotifications(repoID, projectName string, newReleases []
 		return
 	}
 
-	latest := newReleases[0]
-	var body string
-	if len(newReleases) == 1 {
-		body = latest.Version + " is now available"
-	} else {
-		body = fmt.Sprintf("%d new releases, latest %s", len(newReleases), latest.Version)
-	}
-	payload, _ := json.Marshal(map[string]string{
-		"title": projectName + " — new release",
-		"body":  body,
-		"url":   latest.URL,
-	})
-
 	for _, sub := range subs {
+		rels := s.releasesFor(sub.UserID, repoID, newReleases)
+		if len(rels) == 0 {
+			continue
+		}
+		latest := rels[0]
+		var body string
+		if len(rels) == 1 {
+			body = latest.Version + " is now available"
+		} else {
+			body = fmt.Sprintf("%d new releases, latest %s", len(rels), latest.Version)
+		}
+		payload, _ := json.Marshal(map[string]string{
+			"title": projectName + " — new release",
+			"body":  body,
+			"url":   latest.URL,
+		})
 		resp, err := webpush.SendNotification(payload, &webpush.Subscription{
 			Endpoint: sub.Endpoint,
 			Keys:     webpush.Keys{Auth: sub.Auth, P256dh: sub.P256dh},
@@ -484,6 +499,43 @@ func (s *Store) SetProjectEmailImmediate(userID, repoID string, enabled bool) (b
 	return n > 0, nil
 }
 
+func (s *Store) SetProjectIncludePrereleases(userID, repoID string, enabled bool) (bool, error) {
+	res, err := s.db.Exec(
+		"UPDATE user_repos SET include_prereleases = ? WHERE user_id = ? AND repo_id = ?",
+		boolInt(enabled), userID, repoID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// releasesFor drops prereleases unless the user opted in for this project.
+// Notification senders call it per recipient, since releases are shared.
+func (s *Store) releasesFor(userID, repoID string, rels []Release) []Release {
+	var include int
+	s.db.QueryRow("SELECT include_prereleases FROM user_repos WHERE user_id = ? AND repo_id = ?",
+		userID, repoID).Scan(&include)
+	if include != 0 {
+		return rels
+	}
+	var stable []Release
+	for _, r := range rels {
+		if !r.Prerelease {
+			stable = append(stable, r)
+		}
+	}
+	return stable
+}
+
 func (s *Store) getImmediateEmailUsersForRepo(repoID string) ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT u.id, u.email, u.email_verified
@@ -521,8 +573,8 @@ func (s *Store) sendImmediateEmails(repoID string, project Project, newReleases 
 		return
 	}
 
-	for _, release := range newReleases {
-		for _, u := range users {
+	for _, u := range users {
+		for _, release := range s.releasesFor(u.ID, repoID, newReleases) {
 			if err := smtpCfg.SendReleaseEmail(u.Email, project, release); err != nil {
 				log.Printf("⚠ sendImmediateEmails: failed to send to %s: %v", u.Email, err)
 			}
@@ -701,28 +753,25 @@ func scanGitLabSyncTargets(rows *sql.Rows) []GitLabSyncTarget {
 	return targets
 }
 
-func (s *Store) getWebhooksForRepo(repoID string) []struct {
+type webhookTarget struct {
 	wh     Webhook
 	secret string
-} {
-	rows, err := s.db.Query(`SELECT id, repo_id, url, secret FROM webhooks WHERE repo_id = ?`, repoID)
+	userID string
+}
+
+func (s *Store) getWebhooksForRepo(repoID string) []webhookTarget {
+	rows, err := s.db.Query(`SELECT id, repo_id, url, secret, user_id FROM webhooks WHERE repo_id = ?`, repoID)
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
-	var results []struct {
-		wh     Webhook
-		secret string
-	}
+	var results []webhookTarget
 	for rows.Next() {
-		var id, rid, u, sec string
-		if err := rows.Scan(&id, &rid, &u, &sec); err != nil {
+		var id, rid, u, sec, uid string
+		if err := rows.Scan(&id, &rid, &u, &sec, &uid); err != nil {
 			continue
 		}
-		results = append(results, struct {
-			wh     Webhook
-			secret string
-		}{Webhook{ID: id, RepoID: rid, URL: u, HasSecret: sec != ""}, sec})
+		results = append(results, webhookTarget{Webhook{ID: id, RepoID: rid, URL: u, HasSecret: sec != ""}, sec, uid})
 	}
 	return results
 }
@@ -753,25 +802,30 @@ func (s *Store) sendWebhooks(repoID string, project Project, newReleases []Relea
 		URL         string `json:"url"`
 		PublishedAt string `json:"published_at"`
 		Description string `json:"description,omitempty"`
+		Prerelease  bool   `json:"prerelease"`
 	}
-	relPayloads := make([]releasePayload, len(newReleases))
-	for i, r := range newReleases {
-		relPayloads[i] = releasePayload{
-			Version:     r.Version,
-			URL:         r.URL,
-			PublishedAt: r.PublishedAt.Format(time.RFC3339),
-			Description: r.Description,
+	payloadFor := func(rels []Release) []byte {
+		relPayloads := make([]releasePayload, len(rels))
+		for i, r := range rels {
+			relPayloads[i] = releasePayload{
+				Version:     r.Version,
+				URL:         r.URL,
+				PublishedAt: r.PublishedAt.Format(time.RFC3339),
+				Description: r.Description,
+				Prerelease:  r.Prerelease,
+			}
 		}
+		body, _ := json.Marshal(map[string]interface{}{
+			"project": map[string]string{
+				"id":       project.ID,
+				"name":     project.Name,
+				"platform": project.Platform,
+				"repo_url": project.RepoURL,
+			},
+			"releases": relPayloads,
+		})
+		return body
 	}
-	body, _ := json.Marshal(map[string]interface{}{
-		"project": map[string]string{
-			"id":       project.ID,
-			"name":     project.Name,
-			"platform": project.Platform,
-			"repo_url": project.RepoURL,
-		},
-		"releases": relPayloads,
-	})
 
 	// Reuse the GitLab SSRF-guarded transport: webhook URLs are user-supplied.
 	client := &http.Client{
@@ -780,6 +834,11 @@ func (s *Store) sendWebhooks(repoID string, project Project, newReleases []Relea
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	for _, entry := range hooks {
+		rels := s.releasesFor(entry.userID, repoID, newReleases)
+		if len(rels) == 0 {
+			continue
+		}
+		body := payloadFor(rels)
 		req, err := http.NewRequest(http.MethodPost, entry.wh.URL, bytes.NewReader(body))
 		if err != nil {
 			log.Printf("⚠ Webhook bad URL %s: %v", entry.wh.URL, err)
@@ -966,10 +1025,11 @@ func (s *Store) GetReleasesPublishedOn(userID string, date time.Time) []Release 
 	to := time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
 	rows, err := s.db.Query(`
 		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url,
-		       r.published_at, r.description, r.release_notes
+		       r.published_at, r.description, r.release_notes, r.is_prerelease
 		FROM releases r
 		INNER JOIN user_repos ur ON ur.repo_id = r.repo_id
 		WHERE ur.user_id = ?
+		  AND (r.is_prerelease = 0 OR ur.include_prereleases = 1)
 		  AND r.published_at >= ?
 		  AND r.published_at < ?
 		ORDER BY r.name ASC, r.published_at DESC`, userID, from, to)
@@ -1086,7 +1146,7 @@ func (s *Store) RemoveUserRepo(userID, repoID string) bool {
 func (s *Store) GetUserRepos(userID string) []Project {
 	rows, err := s.db.Query(`
 		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled,
-		       ur.email_immediate,
+		       ur.email_immediate, ur.include_prereleases,
 		       ur.gitlab_sync_enabled, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error,
 		       ur.gitlab_project_path
 		FROM repos r
@@ -1102,9 +1162,9 @@ func (s *Store) GetUserRepos(userID string) []Project {
 	for rows.Next() {
 		var p Project
 		var lastRefresh, lastGitLabSync string
-		var pushEnabled, emailImmediate, gitlabSyncEnabled int
+		var pushEnabled, emailImmediate, includePre, gitlabSyncEnabled int
 		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled,
-			&emailImmediate,
+			&emailImmediate, &includePre,
 			&gitlabSyncEnabled, &p.GitLabSyncFrequency, &lastGitLabSync, &p.LastGitLabSyncError,
 			&p.GitLabProjectPath); err != nil {
 			log.Printf("⚠ Failed to scan project: %v", err)
@@ -1118,6 +1178,7 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		}
 		p.PushEnabled = pushEnabled != 0
 		p.EmailImmediate = emailImmediate != 0
+		p.IncludePrereleases = includePre != 0
 		p.GitLabSyncEnabled = gitlabSyncEnabled != 0
 		projects = append(projects, p)
 	}
@@ -1127,7 +1188,7 @@ func (s *Store) GetUserRepos(userID string) []Project {
 // GetReleases returns all releases for a specific repo (used for testing).
 func (s *Store) GetReleases(repoID string) []Release {
 	rows, err := s.db.Query(`
-		SELECT id, repo_id, name, version, platform, url, published_at, description, release_notes
+		SELECT id, repo_id, name, version, platform, url, published_at, description, release_notes, is_prerelease
 		FROM releases WHERE repo_id = ? ORDER BY published_at DESC`, repoID)
 	if err != nil {
 		return nil
@@ -1167,10 +1228,11 @@ func scanProjects(rows *sql.Rows) []Project {
 
 func (s *Store) GetUserReleases(userID string) []Release {
 	rows, err := s.db.Query(`
-		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes
+		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes, r.is_prerelease
 		FROM releases r
 		INNER JOIN user_repos ur ON ur.repo_id = r.repo_id
 		WHERE ur.user_id = ?
+		  AND (r.is_prerelease = 0 OR ur.include_prereleases = 1)
 		ORDER BY r.published_at DESC`, userID)
 	if err != nil {
 		log.Printf("⚠ Failed to query user releases: %v", err)
@@ -1182,10 +1244,11 @@ func (s *Store) GetUserReleases(userID string) []Release {
 
 func (s *Store) GetUserReleasesForFeed(userID string, limit int) []Release {
 	rows, err := s.db.Query(`
-		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes
+		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes, r.is_prerelease
 		FROM releases r
 		INNER JOIN user_repos ur ON ur.repo_id = r.repo_id
 		WHERE ur.user_id = ?
+		  AND (r.is_prerelease = 0 OR ur.include_prereleases = 1)
 		ORDER BY r.published_at DESC
 		LIMIT ?`, userID, limit)
 	if err != nil {
@@ -1199,7 +1262,7 @@ func (s *Store) GetUserReleasesForFeed(userID string, limit int) []Release {
 // GetAllReleases returns all releases across all repos (used for testing).
 func (s *Store) GetAllReleases() []Release {
 	rows, err := s.db.Query(`
-		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes
+		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes, r.is_prerelease
 		FROM releases r
 		INNER JOIN repos rp ON rp.id = r.repo_id
 		ORDER BY r.published_at DESC`)
@@ -1216,12 +1279,14 @@ func scanReleases(rows *sql.Rows) []Release {
 	for rows.Next() {
 		var r Release
 		var publishedAt string
+		var prerelease int
 		if err := rows.Scan(&r.ID, &r.ProjectID, &r.Name, &r.Version, &r.Platform, &r.URL,
-			&publishedAt, &r.Description, &r.ReleaseNotes); err != nil {
+			&publishedAt, &r.Description, &r.ReleaseNotes, &prerelease); err != nil {
 			log.Printf("⚠ Failed to scan release: %v", err)
 			continue
 		}
 		r.PublishedAt, _ = time.Parse(time.RFC3339, publishedAt)
+		r.Prerelease = prerelease != 0
 		releases = append(releases, r)
 	}
 	return releases
@@ -1230,10 +1295,10 @@ func scanReleases(rows *sql.Rows) []Release {
 func (s *Store) AddRelease(repoID string, r Release) {
 	_, err := s.db.Exec(`
 		INSERT OR REPLACE INTO releases
-			(id, repo_id, name, version, platform, url, published_at, description, release_notes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(id, repo_id, name, version, platform, url, published_at, description, release_notes, is_prerelease)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.ID, repoID, r.Name, r.Version, r.Platform, r.URL,
-		r.PublishedAt.Format(time.RFC3339), r.Description, r.ReleaseNotes,
+		r.PublishedAt.Format(time.RFC3339), r.Description, r.ReleaseNotes, boolInt(r.Prerelease),
 	)
 	if err != nil {
 		log.Printf("⚠ Failed to add release %s: %v", r.ID, err)
@@ -1351,10 +1416,10 @@ func (s *Store) RefreshProject(repoID string) {
 	for _, r := range releases {
 		_, err := tx.Exec(`
 			INSERT INTO releases
-				(id, repo_id, name, version, platform, url, published_at, description, release_notes)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				(id, repo_id, name, version, platform, url, published_at, description, release_notes, is_prerelease)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			r.ID, repoID, r.Name, r.Version, r.Platform, r.URL,
-			r.PublishedAt.Format(time.RFC3339), r.Description, r.ReleaseNotes,
+			r.PublishedAt.Format(time.RFC3339), r.Description, r.ReleaseNotes, boolInt(r.Prerelease),
 		)
 		if err != nil {
 			tx.Rollback()

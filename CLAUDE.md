@@ -53,6 +53,8 @@ The HTML/CSS/JS frontend lives in `web/` (`index.html`, `app.css`, `app.js`), em
 
 **Concurrency:** All store mutations hold a write lock; reads use read lock. Goroutines are fire-and-forget for refresh operations.
 
+**Prereleases:** `releases.is_prerelease` is set by the fetchers (`isPrerelease` heuristic where the API has no flag); `user_repos.include_prereleases` (default off) is per user per project. Read queries filter in SQL; notification senders filter per recipient with `Store.releasesFor`. Releases themselves are shared and always stored.
+
 **Release IDs** are platform-prefixed (`gh_<id>`, `npm_<version>`, `docker_<tag>`) to prevent duplicates on re-fetch.
 
 **Port:** 8080 (hardcoded in `main.go`).

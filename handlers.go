@@ -679,6 +679,8 @@ func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string
 		RepoID         string `json:"repo_id"`
 		PushEnabled    bool   `json:"push_enabled"`
 		EmailImmediate bool   `json:"email_immediate"`
+		// Pointer: older clients omit it, and that must not reset the setting.
+		IncludePrereleases *bool `json:"include_prereleases"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -699,6 +701,12 @@ func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string
 	}
 	if smtpEnabled {
 		if _, err := store.SetProjectEmailImmediate(userID, req.RepoID, req.EmailImmediate); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if req.IncludePrereleases != nil {
+		if _, err := store.SetProjectIncludePrereleases(userID, req.RepoID, *req.IncludePrereleases); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

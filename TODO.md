@@ -6,7 +6,7 @@
 - [x] **Add Send Email Summary** - daily digest email at 7am UTC of previous day's releases; opt-in toggle in account settings panel (⚙ in header)
 - [x] **Add immediate email** - to send an when a new release is detected. (user option per project)
 - [x] **Main page sort options** - sort by date added, latest release, and alphabetically.
-- [ ] **Determine if a release is a prerelease or not** - allow the user per project to be notified about prereleases.
+- [x] **Determine if a release is a prerelease or not** - allow the user per project to be notified about prereleases.
 - [ ] **Use project icon** - Put the project icon to the left of the project name.  
 - [ ] **screen usage** - on the phone it looks great but on the computer there can be more usable space  if the width is computer wide put the add repo to the right of the releases without shrinking the repos space and alway have it open  
 - [x] **add commit sha to build info** - need a way to determine which build is being run from the ui
@@ -14,6 +14,7 @@
 
 ## Done
 
+- [x] **Prerelease handling** — releases are flagged as prereleases (GitHub/Artifact Hub API flags, GitLab `upcoming_release`, a version/tag heuristic for npm, PyPI, Docker and Helm repos); per-project "Include prereleases" toggle (default off) controls whether they appear in the list, feed and digest and whether push, immediate email and webhooks fire; shown with a `pre` badge when included
 - [x] **Build info in UI** — short commit SHA shown bottom-right on every page and logged at startup; injected via `GIT_SHA` build-arg → `-ldflags -X main.version` in the Dockerfile (build.sh, build-podman.sh, GitLab CI, GitHub Actions and docker-compose pass it); plain `go build` falls back to the embedded VCS revision
 - [x] **Frontend out of Go strings** — `ui.go` split into `web/index.html`, `web/app.css`, `web/app.js`, embedded with `go:embed`; byte-identical to the old inline page, served at `/` and `/static/`
 - [x] **Project sort options** — Sort selector on the main page (latest release, date added, name A–Z); applied before pagination, remembered per browser, default latest release

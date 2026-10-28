@@ -489,6 +489,7 @@ function buildReleasesHTML(releases, projects) {
             var vlink = '<a class="ver-chip-link" href="' + esc(r.url) + '" target="_blank"' +
                 (notes ? ' title="' + esc(notes) + '"' : '') + '>' + esc(r.version) + '</a>';
             return '<span class="ver-chip">' + fmtAge(r.published_at) + ': ' + vlink +
+                (r.prerelease ? ' <span class="pre-tag">pre</span>' : '') +
                 (i < visible.length - 1 || hidden.length > 0 ? ',' : '') + '</span>';
         }).join('');
 
@@ -501,7 +502,7 @@ function buildReleasesHTML(releases, projects) {
             var notes = r.release_notes || r.description || '';
             return '<div class="ver-row" role="button" tabindex="0" onclick="toggleNotes(this)">' +
                 '<div class="ver-top">' +
-                    '<span class="ver-tag">' + esc(r.version) + '</span>' +
+                    '<span class="ver-tag">' + esc(r.version) + (r.prerelease ? ' <span class="pre-tag">pre</span>' : '') + '</span>' +
                     '<span class="ver-date">' + fmtAge(r.published_at) + '</span>' +
                 '</div>' +
                 (notes
@@ -529,6 +530,7 @@ function buildReleasesHTML(releases, projects) {
                         'data-gitlab-freq="' + esc((proj && proj.gitlab_sync_frequency) || 'daily') + '" ' +
                         'data-gitlab-error="' + esc((proj && proj.last_gitlab_sync_error) || '') + '" ' +
                         'data-email-immediate="' + (proj && proj.email_immediate ? '1' : '0') + '" ' +
+                        'data-include-prereleases="' + (proj && proj.include_prereleases ? '1' : '0') + '" ' +
                         'onclick="openSettingsPanel(this)">&#x2699;</button>' +
                     '<button class="btn btn-ghost proj-ctrl" title="Delete" aria-label="Delete ' + esc(pname) + '" style="color:#f87171" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
@@ -646,7 +648,7 @@ function loadReleases() {
             if (fresh) {
                 loadSettingsPanel(_settingsRepoID, fresh.push_enabled,
                     fresh.gitlab_sync_enabled, fresh.gitlab_sync_frequency || 'daily', fresh.last_gitlab_sync_error || '',
-                    !!fresh.email_immediate);
+                    !!fresh.email_immediate, !!fresh.include_prereleases);
             } else {
                 closeSettingsPanel();
                 _settingsRepoID = null;
@@ -670,12 +672,13 @@ function openSettingsPanel(btn) {
     var glFreq = btn.dataset.gitlabFreq || 'daily';
     var glError = btn.dataset.gitlabError || '';
     var emailImmediate = btn.dataset.emailImmediate === '1';
+    var includePre = btn.dataset.includePrereleases === '1';
     _settingsRepoID = id;
     document.getElementById('settings-panel-title').textContent = name;
     closeAddPanel();
     closeAccountPanel();
     document.getElementById('settings-panel').classList.add('open');
-    loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImmediate);
+    loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImmediate, includePre);
 }
 
 function closeSettingsPanel() {
@@ -683,13 +686,13 @@ function closeSettingsPanel() {
     _settingsRepoID = null;
 }
 
-function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImmediate) {
+function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImmediate, includePre) {
     var body = document.getElementById('settings-panel-body');
     body.innerHTML = '<div style="font-size:0.85rem;color:#8796ad">Loading...</div>';
     fetch('/api/webhooks?repo_id=' + encodeURIComponent(id))
         .then(apiJSON)
         .then(function(hooks) {
-            body.innerHTML = renderSettingsPanelBody(id, pushEnabled, hooks || [], glEnabled, glFreq, glError);
+            body.innerHTML = renderSettingsPanelBody(id, pushEnabled, hooks || [], glEnabled, glFreq, glError, includePre);
             addEmailToggleToPanel(id, !!emailImmediate);
         })
         .catch(function() {
@@ -697,7 +700,7 @@ function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImm
         });
 }
 
-function renderSettingsPanelBody(id, pushEnabled, hooks, glEnabled, glFreq, glError) {
+function renderSettingsPanelBody(id, pushEnabled, hooks, glEnabled, glFreq, glError, includePre) {
     return '<div class="settings-section">' +
             '<div class="settings-section-title">Push Notifications</div>' +
             '<div class="toggle-row">' +
@@ -707,6 +710,17 @@ function renderSettingsPanelBody(id, pushEnabled, hooks, glEnabled, glFreq, glEr
                     '<span class="toggle-slider"></span>' +
                 '</label>' +
             '</div>' +
+        '</div>' +
+        '<div class="settings-section">' +
+            '<div class="settings-section-title">Prereleases</div>' +
+            '<div class="toggle-row">' +
+                '<label for="pre-cb-' + esc(id) + '">Include prereleases</label>' +
+                '<label class="toggle">' +
+                    '<input type="checkbox" id="pre-cb-' + esc(id) + '" ' + (includePre ? 'checked' : '') + ' onchange="doTogglePrereleases(this,\'' + esc(id) + '\')">' +
+                    '<span class="toggle-slider"></span>' +
+                '</label>' +
+            '</div>' +
+            '<div class="settings-hint">Show alpha, beta and rc versions in the list, feed and digest, and notify about them.</div>' +
         '</div>' +
         '<div class="settings-section">' +
             '<div class="settings-section-title">GitLab Sync</div>' +
@@ -840,6 +854,28 @@ function doTogglePush(checkbox, id) {
     }).catch(function() {
         checkbox.checked = !checkbox.checked;
         toast('Error updating setting.', 'err');
+    });
+}
+
+function doTogglePrereleases(checkbox, id) {
+    var pushCb = document.getElementById('push-cb-' + id);
+    var eiCb = document.getElementById('ei-cb-' + id);
+    fetch('/api/project-settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            repo_id: id,
+            push_enabled: pushCb ? pushCb.checked : false,
+            email_immediate: eiCb ? eiCb.checked : false,
+            include_prereleases: checkbox.checked
+        })
+    }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        toast(checkbox.checked ? 'Prereleases included.' : 'Prereleases hidden.', 'ok');
+        loadReleases();
+    }).catch(function() {
+        checkbox.checked = !checkbox.checked;
+        toast('Failed to update setting.', 'err');
     });
 }
 
