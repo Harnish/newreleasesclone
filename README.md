@@ -32,6 +32,7 @@ Register an account on first visit, then add projects to track.
 | Variable | Purpose |
 |----------|---------|
 | `GITLAB_ALLOWED_HOSTS` | Comma-separated hostnames exempt from the GitLab sync SSRF guard (`gitlab_url` normally cannot resolve to a private/loopback/link-local/CGNAT address). Set this if your own GitLab instance resolves to a private IP from where newreleases runs — e.g. split-horizon DNS, or a Kubernetes service name/ClusterIP when both run in the same cluster. Example: `GITLAB_ALLOWED_HOSTS=gitlab.example.internal,gitlab.default.svc.cluster.local`. Operator-set only — not exposed to end users. |
+| `TRUSTED_PROXY` | Set to `true` only when a reverse proxy/ingress always sets `X-Forwarded-For`. Login/register rate limits then key on the rightmost forwarded IP (assumes one proxy hop) instead of the connection address, which behind a proxy is shared by every user. |
 
 ## Adding Projects
 

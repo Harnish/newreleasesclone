@@ -42,7 +42,11 @@ spec:
           # instance resolves to a private/cluster-internal address from
           # here (split-horizon DNS or a k8s service name) — see README's
           # Environment Variables section.
-          # env:
+          # GITLAB_ALLOWED_HOSTS is optional (see above); TRUSTED_PROXY=true
+          # makes rate limits key on the ingress-set X-Forwarded-For.
+          env:
+            - name: TRUSTED_PROXY
+              value: "true"
           #   - name: GITLAB_ALLOWED_HOSTS
           #     value: "gitlab.whiskeyonthe.rocks"
           volumeMounts:

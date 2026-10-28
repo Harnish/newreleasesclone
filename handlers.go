@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -164,9 +165,17 @@ func allow(key string, max int, window time.Duration) bool {
 			}
 		}
 	}
-	// Hard cap: fail closed for new keys when the map is full.
+	// Hard cap: evict the least recently used key rather than locking out new
+	// callers. ponytail: O(n) scan, only runs when the map is full.
 	if _, known := attempts[key]; !known && len(attempts) >= maxAttemptKeys {
-		return false
+		var oldest string
+		var oldestT time.Time
+		for k, ts := range attempts {
+			if last := ts[len(ts)-1]; oldest == "" || last.Before(oldestT) {
+				oldest, oldestT = k, last
+			}
+		}
+		delete(attempts, oldest)
 	}
 	recent := attempts[key][:0]
 	for _, t := range attempts[key] {
@@ -188,7 +197,21 @@ func forgetAttempts(key string) {
 	attemptMu.Unlock()
 }
 
+// trustedProxy: set TRUSTED_PROXY=true only when a reverse proxy/ingress
+// always sets X-Forwarded-For; otherwise clients could spoof it.
+var trustedProxy = os.Getenv("TRUSTED_PROXY") == "true"
+
 func clientIP(r *http.Request) string {
+	if trustedProxy {
+		// Rightmost entry is the one our proxy appended; earlier ones are
+		// client-controlled. ponytail: assumes exactly one proxy hop.
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if ip := strings.TrimSpace(parts[len(parts)-1]); net.ParseIP(ip) != nil {
+				return ip
+			}
+		}
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
