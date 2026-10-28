@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -43,13 +44,17 @@ func TestClientIP(t *testing.T) {
 	r := httptest.NewRequest("GET", "/", nil)
 	r.RemoteAddr = "10.0.0.1:1234"
 	r.Header.Set("X-Forwarded-For", "6.6.6.6, 203.0.113.9")
-	defer func(v bool) { trustedProxy = v }(trustedProxy)
-	trustedProxy = false
+	defer func(v []*net.IPNet) { trustedProxies = v }(trustedProxies)
+	trustedProxies = nil
 	if got := clientIP(r); got != "10.0.0.1" {
-		t.Fatalf("untrusted: got %s", got)
+		t.Fatalf("no proxies configured: got %s", got)
 	}
-	trustedProxy = true
+	trustedProxies = parseCIDRs("10.0.0.0/8, bogus")
 	if got := clientIP(r); got != "203.0.113.9" {
-		t.Fatalf("trusted: got %s", got)
+		t.Fatalf("trusted proxy: got %s", got)
+	}
+	r.RemoteAddr = "198.51.100.7:1234"
+	if got := clientIP(r); got != "198.51.100.7" {
+		t.Fatalf("untrusted peer must not be able to spoof: got %s", got)
 	}
 }

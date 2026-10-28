@@ -42,11 +42,12 @@ spec:
           # instance resolves to a private/cluster-internal address from
           # here (split-horizon DNS or a k8s service name) — see README's
           # Environment Variables section.
-          # GITLAB_ALLOWED_HOSTS is optional (see above); TRUSTED_PROXY=true
-          # makes rate limits key on the ingress-set X-Forwarded-For.
+          # GITLAB_ALLOWED_HOSTS is optional (see above). TRUSTED_PROXY_CIDRS:
+          # rate limits trust X-Forwarded-For only from these peers. Defaults
+          # to RFC1918 ranges; narrow to your ingress controller's pod/node CIDR.
           env:
-            - name: TRUSTED_PROXY
-              value: "true"
+            - name: TRUSTED_PROXY_CIDRS
+              value: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
           #   - name: GITLAB_ALLOWED_HOSTS
           #     value: "gitlab.whiskeyonthe.rocks"
           volumeMounts:

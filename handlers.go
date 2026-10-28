@@ -197,12 +197,42 @@ func forgetAttempts(key string) {
 	attemptMu.Unlock()
 }
 
-// trustedProxy: set TRUSTED_PROXY=true only when a reverse proxy/ingress
-// always sets X-Forwarded-For; otherwise clients could spoof it.
-var trustedProxy = os.Getenv("TRUSTED_PROXY") == "true"
+// trustedProxies: CIDRs (TRUSTED_PROXY_CIDRS, comma-separated) of the reverse
+// proxy/ingress. X-Forwarded-For is honoured only when the connection itself
+// comes from one of them; otherwise clients could spoof it.
+var trustedProxies = parseCIDRs(os.Getenv("TRUSTED_PROXY_CIDRS"))
+
+func parseCIDRs(raw string) []*net.IPNet {
+	var nets []*net.IPNet
+	for _, c := range strings.Split(raw, ",") {
+		if c = strings.TrimSpace(c); c == "" {
+			continue
+		}
+		if _, n, err := net.ParseCIDR(c); err == nil {
+			nets = append(nets, n)
+		} else {
+			log.Printf("⚠ ignoring bad TRUSTED_PROXY_CIDRS entry %q: %v", c, err)
+		}
+	}
+	return nets
+}
+
+func fromTrustedProxy(remote string) bool {
+	ip := net.ParseIP(remote)
+	for _, n := range trustedProxies {
+		if ip != nil && n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
 
 func clientIP(r *http.Request) string {
-	if trustedProxy {
+	conn, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		conn = r.RemoteAddr
+	}
+	if fromTrustedProxy(conn) {
 		// Rightmost entry is the one our proxy appended; earlier ones are
 		// client-controlled. ponytail: assumes exactly one proxy hop.
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
@@ -212,11 +242,7 @@ func clientIP(r *http.Request) string {
 			}
 		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return conn
 }
 
 // POST /api/register
