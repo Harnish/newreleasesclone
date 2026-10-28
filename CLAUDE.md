@@ -47,7 +47,7 @@ The HTML/CSS/JS frontend lives in `web/` (`index.html`, `app.css`, `app.js`), em
 
 **Refresh system:** Projects are "stale" after 30 minutes. `GET /api/refresh-check` triggers background goroutines for all stale projects. All `RefreshProject` calls are non-blocking (`go store.RefreshProject(...)`). After each refresh, `SaveState()` persists to `state.json`.
 
-**Platform fetchers** (`fetchGitHubReleases`, `fetchNPMVersions`, `fetchPyPIReleases`, `fetchDockerTags`, `fetchGitLabReleases`) are standalone functions called from `RefreshProject` based on `project.Platform`. GitHub returns up to 30 releases (stable-first); others return 10.
+**Platform fetchers** read through `fetch(url, limit)` (capped body; use it, not bare `http.Get`): (`fetchGitHubReleases`, `fetchNPMVersions`, `fetchPyPIReleases`, `fetchDockerTags`, `fetchGitLabReleases`) are standalone functions called from `RefreshProject` based on `project.Platform`. GitHub returns up to 30 releases (stable-first); others return 10.
 
 **State persistence:** SQLite database at `data/newreleases.db`. Created on startup; seeded with 3 demo projects (kubernetes, react, golang) if fewer than 3 exist. Uses `modernc.org/sqlite` (pure Go, no CGO required). WAL mode enabled; writes serialized through a single connection.
 

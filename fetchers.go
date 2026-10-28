@@ -18,7 +18,7 @@ func fetchGitHubReleases(project Project) []Release {
 	repoPath = strings.TrimSuffix(repoPath, ".git")
 
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=30", repoPath)
-	resp, err := http.Get(url)
+	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ GitHub API error for %s: %v", project.Name, err)
 		return nil
@@ -77,7 +77,7 @@ func fetchNPMVersions(project Project) []Release {
 	}
 
 	url := fmt.Sprintf("https://registry.npmjs.org/%s", pkgName)
-	resp, err := http.Get(url)
+	resp, err := fetch(url, maxBodyLarge)
 	if err != nil {
 		log.Printf("⚠ NPM API error for %s: %v", project.Name, err)
 		return nil
@@ -141,7 +141,7 @@ func fetchPyPIReleases(project Project) []Release {
 	pkgName := project.Name
 
 	url := fmt.Sprintf("https://pypi.org/pypi/%s/json", pkgName)
-	resp, err := http.Get(url)
+	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ PyPI API error for %s: %v", project.Name, err)
 		return nil
@@ -211,7 +211,7 @@ func fetchDockerTags(project Project) []Release {
 	}
 
 	url := fmt.Sprintf("https://hub.docker.com/v2/repositories/%s/tags?page_size=10", repo)
-	resp, err := http.Get(url)
+	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ Docker Hub API error for %s: %v", project.Name, err)
 		return nil
@@ -259,7 +259,7 @@ func fetchGitLabReleases(project Project) []Release {
 	projectID := strings.ReplaceAll(repoPath, "/", "%2F")
 
 	url := fmt.Sprintf("https://gitlab.com/api/v4/projects/%s/releases?per_page=10", projectID)
-	resp, err := http.Get(url)
+	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ GitLab API error for %s: %v", project.Name, err)
 		return nil
@@ -318,6 +318,27 @@ func isPrerelease(version string) bool {
 	return prereleaseWord.MatchString(version) || prereleaseShort.MatchString(version)
 }
 
+const (
+	maxBody      = 16 << 20 // GitHub, PyPI, Docker, GitLab, Artifact Hub (largest seen: ~3 MB)
+	maxBodyLarge = 64 << 20 // npm packuments and Helm index.yaml (largest seen: ~16 MB)
+)
+
+// fetch GETs url and caps the response body at limit bytes, so a hostile or
+// broken upstream can't exhaust memory. Reading past the cap fails with
+// *http.MaxBytesError, which the callers' decoders surface as a parse error.
+func fetch(url string, limit int64) (*http.Response, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	if resp.ContentLength > limit {
+		resp.Body.Close()
+		return nil, fmt.Errorf("response too large: %d bytes (limit %d)", resp.ContentLength, limit)
+	}
+	resp.Body = http.MaxBytesReader(nil, resp.Body, limit) // nil writer is fine; Close closes the original body
+	return resp, nil
+}
+
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -338,7 +359,7 @@ func fetchHelmArtifactHub(project Project) []Release {
 	repoName, chartName := parts[0], parts[1]
 
 	listURL := fmt.Sprintf("%s/api/v1/packages/helm/%s/%s", artifacthubBaseURL, repoName, chartName)
-	resp, err := http.Get(listURL)
+	resp, err := fetch(listURL, maxBody)
 	if err != nil {
 		log.Printf("⚠ Artifact Hub API error for %s: %v", project.Name, err)
 		return nil
@@ -386,7 +407,7 @@ func fetchHelmArtifactHub(project Project) []Release {
 	var releases []Release
 	for _, v := range stable {
 		detailURL := fmt.Sprintf("%s/api/v1/packages/helm/%s/%s/%s", artifacthubBaseURL, repoName, chartName, v.version)
-		detailResp, err := http.Get(detailURL)
+		detailResp, err := fetch(detailURL, maxBody)
 		if err != nil {
 			log.Printf("⚠ Artifact Hub version detail error for %s@%s: %v", project.Name, v.version, err)
 			continue
@@ -442,7 +463,7 @@ func fetchHelmRepo(project Project) []Release {
 		return nil
 	}
 	indexURL := strings.TrimSuffix(project.RepoURL, "/") + "/index.yaml"
-	resp, err := http.Get(indexURL)
+	resp, err := fetch(indexURL, maxBodyLarge)
 	if err != nil {
 		log.Printf("⚠ Helm repo index error for %s: %v", project.Name, err)
 		return nil
