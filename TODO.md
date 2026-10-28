@@ -14,6 +14,9 @@
 
 ## Done
 
+- [x] **Helm repo prereleases** — `fetchHelmRepo` dropped every version containing `-` before the prerelease logic ran, so the include-prereleases toggle did nothing for Helm repos; it now keeps the newest 10 stable + 5 prereleases by publish date (SemVer `-suffix` counts as prerelease) and skips undated entries
+- [x] **Icon downloads can't reach allowlisted hosts** — icon URLs come from third-party Helm indexes, so they use a strict client that ignores `GITLAB_ALLOWED_HOSTS`, except for the Helm repo's own host
+- [x] **Split `main_test.go`** — 2,129 lines into `testhelpers_test.go`, `store_test.go`, `handlers_projects_test.go`, `email_test.go`, `account_test.go`, `feed_test.go`, `auth_test.go`, `migrations_v10_test.go` and `fetchers_test.go`; identical set of 146 tests/benchmarks
 - [x] **Project icons** — shown left of each project name. Fetched server-side (GitHub owner avatar, GitLab project avatar, Artifact Hub logo, Helm chart `icon`), validated (PNG/JPEG/GIF/WebP/SVG, 512 KB cap, SSRF-guarded client), cached in `repo_icons` and served from `/api/icon` so browsers never contact third-party hosts; npm/PyPI/Docker and any failed lookup get a letter badge in the platform colour. Fetchers now send an identifying User-Agent
 - [x] **Fix npm/PyPI version window** — both fetchers sorted version strings as text (so `9.0.0` outranked `10.0.0`) and could keep old versions while dropping new ones; they now keep the newest 10 stable + 5 prereleases by publish time (`newestReleases`), skip versions with no publish date instead of stamping them "now", and `experimental` builds count as prereleases (React's `0.0.0-experimental-*` channel was filling the whole window)
 - [x] **Helm repo SSRF guard** — Helm repo index fetches now use the dial-time-guarded transport (private/loopback/metadata addresses refused, https-only redirects, `GITLAB_ALLOWED_HOSTS` for internal repos); adding a `helm-repo` project with an unsafe URL is rejected up front

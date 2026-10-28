@@ -61,19 +61,19 @@ func TestFetchIconValidatesContent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if ct, data, err := fetchIcon(srv.URL + "/png-lying-header"); err != nil || ct != "image/png" || len(data) == 0 {
+	if ct, data, err := fetchIcon(srv.URL+"/png-lying-header", ""); err != nil || ct != "image/png" || len(data) == 0 {
 		t.Errorf("png: ct=%q err=%v", ct, err)
 	}
-	if ct, _, err := fetchIcon(srv.URL + "/svg"); err != nil || ct != "image/svg+xml" {
+	if ct, _, err := fetchIcon(srv.URL+"/svg", ""); err != nil || ct != "image/svg+xml" {
 		t.Errorf("svg: ct=%q err=%v", ct, err)
 	}
 	for _, path := range []string{"/svg-undeclared", "/html", "/huge", "/missing"} {
-		if _, _, err := fetchIcon(srv.URL + path); err == nil {
+		if _, _, err := fetchIcon(srv.URL+path, ""); err == nil {
 			t.Errorf("%s: expected rejection", path)
 		}
 	}
 	for _, bad := range []string{"ftp://example.com/x.png", "file:///etc/passwd", "javascript:alert(1)", ""} {
-		if _, _, err := fetchIcon(bad); err == nil {
+		if _, _, err := fetchIcon(bad, ""); err == nil {
 			t.Errorf("fetchIcon(%q): expected rejection", bad)
 		}
 	}
@@ -83,7 +83,7 @@ func TestFetchIconRefusesInternalAddresses(t *testing.T) {
 	// No loopback exemption: the guard must stop the download itself.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(tinyPNG()) }))
 	defer srv.Close()
-	_, _, err := fetchIcon(srv.URL + "/x.png")
+	_, _, err := fetchIcon(srv.URL+"/x.png", "")
 	if err == nil || !strings.Contains(err.Error(), "disallowed") {
 		t.Fatalf("got %v, want the disallowed-address rejection", err)
 	}
@@ -226,5 +226,24 @@ func TestHandleIcon(t *testing.T) {
 	}
 	if w := get(repoID, false); w.Code != http.StatusUnauthorized {
 		t.Errorf("no session: code %d, want 401", w.Code)
+	}
+}
+
+func TestFetchIconIgnoresAllowlistUnlessSameHostAsRepo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(tinyPNG()) }))
+	defer srv.Close()
+	withAllowedHostForTests(t, "127.0.0.1") // operator allowlisted this host (and loopback is NOT otherwise permitted)
+
+	// An icon URL from third-party content must not inherit the exemption.
+	if _, _, err := fetchIcon(srv.URL+"/x.png", ""); err == nil || !strings.Contains(err.Error(), "disallowed") {
+		t.Fatalf("icon on an allowlisted host with no trust: got %v, want the disallowed-address rejection", err)
+	}
+	// A different repo host does not vouch for it either.
+	if _, _, err := fetchIcon(srv.URL+"/x.png", "charts.example.com"); err == nil {
+		t.Fatal("icon on a host other than the repo's must stay strict")
+	}
+	// The repo's own host, allowlisted by the operator, may serve its own icon.
+	if ct, _, err := fetchIcon(srv.URL+"/x.png", "127.0.0.1"); err != nil || ct != "image/png" {
+		t.Fatalf("same-host icon: ct=%q err=%v", ct, err)
 	}
 }

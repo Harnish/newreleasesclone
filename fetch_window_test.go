@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -137,5 +138,44 @@ func TestFetchPyPIReleasesUsesFirstUploadAndSkipsEmpty(t *testing.T) {
 	}
 	if want := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC); !got[1].PublishedAt.Equal(want) {
 		t.Errorf("10.0 published %v, want earliest upload %v", got[1].PublishedAt, want)
+	}
+}
+
+func TestFetchHelmRepoWindowAndUndated(t *testing.T) {
+	defer disableHTTPSVerificationForTest()()
+	var idx strings.Builder
+	idx.WriteString("apiVersion: v1\nentries:\n  redis:\n")
+	for i := 1; i <= 12; i++ { // 12 stable, oldest first
+		fmt.Fprintf(&idx, "  - version: \"%d.0.0\"\n    created: \"2026-01-%02dT00:00:00Z\"\n", i, i)
+	}
+	for i := 1; i <= 7; i++ { // 7 prereleases, all newer than every stable
+		fmt.Fprintf(&idx, "  - version: \"13.0.0-rc.%d\"\n    created: \"2026-02-%02dT00:00:00Z\"\n", i, i)
+	}
+	idx.WriteString("  - version: \"0.0.1\"\n") // no created: must be ignored, not stamped "now"
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, idx.String()) }))
+	defer srv.Close()
+
+	got := fetchHelmRepo(Project{Name: "redis", Platform: "helm-repo", RepoURL: srv.URL})
+	stable, pre := 0, 0
+	has := map[string]bool{}
+	for _, r := range got {
+		has[r.Version] = true
+		if r.Prerelease {
+			pre++
+		} else {
+			stable++
+		}
+	}
+	if stable != keepStable || pre != keepPrerelease {
+		t.Fatalf("kept %d stable + %d pre, want %d + %d", stable, pre, keepStable, keepPrerelease)
+	}
+	if !has["12.0.0"] || !has["3.0.0"] || has["2.0.0"] {
+		t.Errorf("stable window wrong: want 3.0.0…12.0.0, got %v", has)
+	}
+	if has["0.0.1"] {
+		t.Error("kept an undated version")
+	}
+	if got[0].Version != "13.0.0-rc.7" {
+		t.Errorf("newest first: got %s", got[0].Version)
 	}
 }

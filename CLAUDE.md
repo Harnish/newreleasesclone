@@ -11,6 +11,9 @@ go build -o newreleases main.go
 # Run all tests with race detection
 go test -v -race
 
+# Tests live next to what they cover (store_test.go, handlers_projects_test.go, email_test.go, ...);
+# shared helpers (newTestStore, newTestAuth) are in testhelpers_test.go
+
 # Run a single test
 go test -v -run TestStoreAddProject ./...
 

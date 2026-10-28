@@ -329,17 +329,28 @@ func fetch(url string, limit int64) (*http.Response, error) {
 // re-checks the resolved IP on every connection (including redirect hops) and
 // honours GITLAB_ALLOWED_HOSTS for internal repos. Redirects must stay on https.
 var guardedClient = &http.Client{
-	Timeout:   30 * time.Second,
-	Transport: gitLabHTTPTransport,
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if req.URL.Scheme != "https" {
-			return fmt.Errorf("refusing redirect to non-https URL %s", req.URL)
-		}
-		if len(via) >= 5 {
-			return fmt.Errorf("stopped after 5 redirects")
-		}
-		return nil
-	},
+	Timeout:       30 * time.Second,
+	Transport:     gitLabHTTPTransport,
+	CheckRedirect: httpsOnlyRedirects,
+}
+
+// strictClient is guardedClient without the GITLAB_ALLOWED_HOSTS exemption: it
+// always refuses private addresses. Use it for URLs that come from third-party
+// content, which must never be able to aim the server at an allowlisted host.
+var strictClient = &http.Client{
+	Timeout:       30 * time.Second,
+	Transport:     &http.Transport{DialContext: gitLabGuardedDialer.DialContext},
+	CheckRedirect: httpsOnlyRedirects,
+}
+
+func httpsOnlyRedirects(req *http.Request, via []*http.Request) error {
+	if req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing redirect to non-https URL %s", req.URL)
+	}
+	if len(via) >= 5 {
+		return fmt.Errorf("stopped after 5 redirects")
+	}
+	return nil
 }
 
 func fetchVia(client *http.Client, url string, limit int64) (*http.Response, error) {
@@ -552,28 +563,11 @@ func fetchHelmRepo(project Project) []Release {
 		return nil
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Created > entries[j].Created
-	})
-
-	var stable []helmChartVersion
-	for _, e := range entries {
-		if !strings.Contains(e.Version, "-") {
-			stable = append(stable, e)
-		}
-	}
-	if len(stable) == 0 {
-		stable = entries
-	}
-	if len(stable) > 10 {
-		stable = stable[:10]
-	}
-
 	var releases []Release
-	for _, e := range stable {
-		pubTime := time.Now()
-		if e.Created != "" {
-			pubTime, _ = time.Parse(time.RFC3339, e.Created)
+	for _, e := range entries {
+		pubTime, err := time.Parse(time.RFC3339, e.Created)
+		if err != nil {
+			continue // undated: can't place it, and a fake "now" would outrank real releases
 		}
 		url := project.RepoURL
 		if len(e.URLs) > 0 {
@@ -591,9 +585,10 @@ func fetchHelmRepo(project Project) []Release {
 			URL:         url,
 			PublishedAt: pubTime,
 			Description: "Helm Chart",
-			Prerelease:  isPrerelease(e.Version),
+			// Chart versions are SemVer, where any "-suffix" marks a prerelease.
+			Prerelease: strings.Contains(e.Version, "-") || isPrerelease(e.Version),
 		})
 	}
 
-	return releases
+	return newestReleases(releases)
 }

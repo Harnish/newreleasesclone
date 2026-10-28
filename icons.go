@@ -106,15 +106,24 @@ func artifactHubIconURL(p Project) string {
 	return artifacthubBaseURL + "/image/" + url.PathEscape(data.LogoImageID)
 }
 
-// fetchIcon downloads rawURL through the SSRF-guarded client and returns the
-// bytes with a content type we vouch for. The type comes from the content, not
-// the server's header, except SVG, which must also be declared as SVG.
-func fetchIcon(rawURL string) (contentType string, data []byte, err error) {
+// fetchIcon downloads rawURL and returns the bytes with a content type we
+// vouch for. The type comes from the content, not the server's header, except
+// SVG, which must also be declared as SVG.
+//
+// Icon URLs can come from third-party content (a Helm repo's index), so the
+// download uses strictClient, which ignores GITLAB_ALLOWED_HOSTS. The one
+// exception is trustedHost: the Helm repo's own host, which the operator has
+// already allowlisted, may serve its own icons.
+func fetchIcon(rawURL, trustedHost string) (contentType string, data []byte, err error) {
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return "", nil, fmt.Errorf("unusable icon URL %q", rawURL)
 	}
-	resp, err := fetchVia(guardedClient, rawURL, maxIconBytes)
+	client := strictClient
+	if trustedHost != "" && strings.EqualFold(u.Hostname(), trustedHost) && isAllowedHost(trustedHost) {
+		client = guardedClient
+	}
+	resp, err := fetchVia(client, rawURL, maxIconBytes)
 	if err != nil {
 		return "", nil, err
 	}
@@ -186,7 +195,13 @@ func (s *Store) refreshIcon(p Project) {
 	var contentType string
 	var data []byte
 	if iconURL := iconURLFor(p); iconURL != "" {
-		ct, d, err := fetchIcon(iconURL)
+		trusted := ""
+		if p.Platform == "helm-repo" {
+			if ru, err := url.Parse(p.RepoURL); err == nil {
+				trusted = ru.Hostname()
+			}
+		}
+		ct, d, err := fetchIcon(iconURL, trusted)
 		if err != nil {
 			log.Printf("⚠ Icon for %s: %v", p.Name, err)
 		} else {
