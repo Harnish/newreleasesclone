@@ -507,7 +507,13 @@ body {
 <div class="content">
     <div class="releases-header">
         <span class="releases-title">Projects</span>
-        <div style="display:flex;align-items:center;gap:0.6rem">
+        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;justify-content:flex-end">
+            <label style="font-size:0.8rem;color:#94a3b8" for="sort-select">Sort:</label>
+            <select id="sort-select" class="page-size-select" onchange="onSortChange(this.value)">
+                <option value="latest">Latest release</option>
+                <option value="added">Date added</option>
+                <option value="name">Name (A–Z)</option>
+            </select>
             <label style="font-size:0.8rem;color:#94a3b8" for="page-size-select">Per page:</label>
             <select id="page-size-select" class="page-size-select" onchange="onPageSizeChange(this.value)">
                 <option value="5">5</option>
@@ -688,6 +694,11 @@ var allProjects = [];
 var allReleases = [];
 var currentPage = 1;
 var pageSize = parseInt(localStorage.getItem('page_size'), 10) || 10;
+var SORT_MODES = ['latest', 'added', 'name'];
+var sortMode = (function() {
+    try { var m = localStorage.getItem('sort_mode'); if (SORT_MODES.indexOf(m) !== -1) return m; } catch (e) {}
+    return 'latest';
+})();
 
 function showApp() {
     document.getElementById('auth-page').style.display = 'none';
@@ -1035,12 +1046,15 @@ function buildReleasesHTML(releases, projects) {
     var projMap = {};
     (projects || []).forEach(function(p) { projMap[p.id] = p; });
 
-    var order = [], groups = {};
+    var groups = {};
     releases.forEach(function(r) {
         var pid = r.project_id || '';
-        if (!groups[pid]) { groups[pid] = []; order.push(pid); }
-        groups[pid].push(r);
+        (groups[pid] = groups[pid] || []).push(r);
     });
+    // Follow the (sorted) project order; any release whose project is unknown goes last.
+    var order = (projects || []).map(function(p) { return p.id; })
+        .filter(function(id) { return groups[id]; });
+    Object.keys(groups).forEach(function(id) { if (order.indexOf(id) === -1) order.push(id); });
 
     return order.map(function(pid) {
         var proj = projMap[pid];
@@ -1125,6 +1139,31 @@ function buildPaginationHTML() {
     '</div>';
 }
 
+// Sorts allProjects in place. Server returns projects oldest-added first, so
+// that index (_idx, stamped on load) is the "date added" order.
+function sortProjects() {
+    var latest = {};
+    allReleases.forEach(function(r) {
+        var t = Date.parse(r.published_at) || 0;
+        if (!(r.project_id in latest) || t > latest[r.project_id]) latest[r.project_id] = t;
+    });
+    var byName = function(a, b) { return a.name.toLowerCase().localeCompare(b.name.toLowerCase()); };
+    allProjects.sort(function(a, b) {
+        if (sortMode === 'name') return byName(a, b);
+        if (sortMode === 'added') return b._idx - a._idx;
+        return (latest[b.id] || 0) - (latest[a.id] || 0) || byName(a, b);
+    });
+}
+
+function onSortChange(val) {
+    if (SORT_MODES.indexOf(val) === -1) return;
+    sortMode = val;
+    try { localStorage.setItem('sort_mode', val); } catch (e) {}
+    sortProjects();
+    currentPage = 1;
+    renderPage();
+}
+
 function renderPage() {
     var start = (currentPage - 1) * pageSize;
     var pageProjects = allProjects.slice(start, start + pageSize);
@@ -1136,6 +1175,8 @@ function renderPage() {
         buildReleasesHTML(pageReleases, pageProjects) + buildPaginationHTML();
     var sel = document.getElementById('page-size-select');
     if (sel) sel.value = String(pageSize);
+    var sortSel = document.getElementById('sort-select');
+    if (sortSel) sortSel.value = sortMode;
 }
 
 function goToPage(n) {
@@ -1180,6 +1221,8 @@ function loadReleases() {
     ]).then(function(res) {
         allReleases = res[0] || [];
         allProjects = res[1] || [];
+        allProjects.forEach(function(p, i) { p._idx = i; });
+        sortProjects();
         currentPage = 1;
         renderPage();
         if (_settingsRepoID) {

@@ -5,7 +5,7 @@
 ## Planned
 - [x] **Add Send Email Summary** - daily digest email at 7am UTC of previous day's releases; opt-in toggle in account settings panel (⚙ in header)
 - [x] **Add immediate email** - to send an when a new release is detected. (user option per project)
-- [ ] **Main page sort options** - sort by date added, latest release, and alphabetically.
+- [x] **Main page sort options** - sort by date added, latest release, and alphabetically.
 - [ ] **Determine if a release is a prerelease or not** - allow the user per project to be notified about prereleases.
 - [ ] **Use project icon** - Put the project icon to the left of the project name.  
 - [ ] **screen usage** - on the phone it looks great but on the computer there can be more usable space  if the width is computer wide put the add repo to the right of the releases without shrinking the repos space and alway have it open  
@@ -14,6 +14,7 @@
 
 ## Done
 
+- [x] **Project sort options** — Sort selector on the main page (latest release, date added, name A–Z); applied before pagination, remembered per browser, default latest release
 - [x] **Security hardening** — webhook SSRF guard, `Secure` session cookie behind TLS/`X-Forwarded-Proto`, HTTP server/client timeouts, in-memory login/register rate limits, `.gitignore` for local artifacts
 - [x] **UI hardening** — AA contrast for muted text, keyboard focus rings, aria labels, touch-visible project controls, 16px inputs on mobile, long-text truncation, session-expiry handling and retry on load failure; added PRODUCT.md / DESIGN.md design context
 - [x] **Immediate email on new release** — plain-text email sent the moment a new release is detected (opt-in per project per user, gated on SMTP configured + verified email); toggle in the project settings panel alongside push notifications

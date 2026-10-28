@@ -7,6 +7,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub, Helm (Artifact Hub & custom repos)
 - **User accounts**: Register/login with session-based auth; each user tracks their own set of projects
 - **Shared release data**: Two users adding the same repo share one set of fetched releases
+- **Sorting**: Order projects by latest release (default), date added, or name; the choice is remembered in your browser and applies across pages
 - **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
 - **Browser push notifications**: Click 🔔 in the header to subscribe; notifications fire when a new release is detected on any tracked repo
 - **Email notifications**: Opt-in per project — a daily digest of the previous day's releases, and/or an immediate plain-text email the moment a new release is detected (requires SMTP configured and a verified email)
