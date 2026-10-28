@@ -31,7 +31,7 @@ docker-compose up
 
 ## Architecture
 
-Single `main` package, split by concern: `main.go` (wiring/routes), `handlers.go` (HTTP), `store.go` (SQLite + migrations), `fetchers.go` (platform APIs), `ui.go` (`go:embed` of `web/`), `email.go`, `scheduler.go`, `gitlab*.go`/`gitmirror.go`/`awesome.go` (GitLab sync), `models.go`.
+Single `main` package, split by concern: `main.go` (wiring/routes), `handlers.go` (HTTP), `store.go` (SQLite queries), `migrations.go` (schema), `fetchers.go` (platform APIs), `ui.go` (`go:embed` of `web/`), `email.go`, `scheduler.go`, `gitlab*.go`/`gitmirror.go`/`awesome.go` (GitLab sync), `models.go`.
 
 **Core types:**
 - `Store` — thread-safe state container using `sync.RWMutex`; wraps the SQLite DB (users, sessions, repos, releases, webhooks, settings)
@@ -52,6 +52,8 @@ The HTML/CSS/JS frontend lives in `web/` (`index.html`, `app.css`, `app.js`), em
 **State persistence:** SQLite database at `data/newreleases.db`. Created on startup; seeded with 3 demo projects (kubernetes, react, golang) if fewer than 3 exist. Uses `modernc.org/sqlite` (pure Go, no CGO required). WAL mode enabled; writes serialized through a single connection.
 
 **Concurrency:** All store mutations hold a write lock; reads use read lock. Goroutines are fire-and-forget for refresh operations.
+
+**Schema changes:** append a `{version, stmts}` entry to `migrations` in `migrations.go` (next consecutive version; never edit released ones). Each migration runs in one transaction with its `user_version` bump, so a failure rolls back. Table rebuilds set `fkOff`.
 
 **Prereleases:** `releases.is_prerelease` is set by the fetchers (`isPrerelease` heuristic where the API has no flag); `user_repos.include_prereleases` (default off) is per user per project. Read queries filter in SQL; notification senders filter per recipient with `Store.releasesFor`. Releases themselves are shared and always stored.
 
