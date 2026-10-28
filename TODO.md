@@ -14,6 +14,7 @@
 
 ## Done
 
+- [x] **Helm repo SSRF guard** — Helm repo index fetches now use the dial-time-guarded transport (private/loopback/metadata addresses refused, https-only redirects, `GITLAB_ALLOWED_HOSTS` for internal repos); adding a `helm-repo` project with an unsafe URL is rejected up front
 - [x] **Fetcher response size caps** — all platform fetchers read through a capped `fetch()` (16 MiB; 64 MiB for npm packuments and Helm `index.yaml`, vs ~16 MB / ~7 MB largest seen), so a hostile or broken upstream can't exhaust memory
 - [x] **Migration table** — the 13 hand-written blocks in `store.go` became a `{version, stmts}` table in `migrations.go`; each step is transactional (a failure no longer leaves a half-applied column with the version unbumped); schema verified identical to the old code from every starting version
 - [x] **Prerelease handling** — releases are flagged as prereleases (GitHub/Artifact Hub API flags, GitLab `upcoming_release`, a version/tag heuristic for npm, PyPI, Docker and Helm repos); per-project "Include prereleases" toggle (default off) controls whether they appear in the list, feed and digest and whether push, immediate email and webhooks fire; shown with a `pre` badge when included

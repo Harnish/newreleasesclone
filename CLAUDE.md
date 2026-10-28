@@ -61,7 +61,7 @@ The HTML/CSS/JS frontend lives in `web/` (`index.html`, `app.css`, `app.js`), em
 
 **Port:** 8080 (hardcoded in `main.go`).
 
-**Security:** webhook and GitLab outbound requests go through the SSRF-guarded `gitLabHTTPTransport` (`GITLAB_ALLOWED_HOSTS` allowlists internal hosts). Login/register are rate limited in-memory (`allow`); set `TRUSTED_PROXY_CIDRS` behind a proxy so limits key on `X-Forwarded-For`.
+**Security:** webhook, GitLab and Helm repo (`helmRepoClient`, the only fetcher with a user-supplied host) outbound requests go through the SSRF-guarded `gitLabHTTPTransport` (`GITLAB_ALLOWED_HOSTS` allowlists internal hosts). Login/register are rate limited in-memory (`allow`); set `TRUSTED_PROXY_CIDRS` behind a proxy so limits key on `X-Forwarded-For`.
 
 **Max releases stored per project:** 50 (enforced in `AddRelease`).
 

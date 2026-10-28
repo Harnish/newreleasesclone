@@ -327,7 +327,29 @@ const (
 // broken upstream can't exhaust memory. Reading past the cap fails with
 // *http.MaxBytesError, which the callers' decoders surface as a parse error.
 func fetch(url string, limit int64) (*http.Response, error) {
-	resp, err := http.Get(url)
+	return fetchVia(http.DefaultClient, url, limit)
+}
+
+// helmRepoClient is for Helm repo index URLs, the one fetch whose host is
+// user-supplied. Its transport re-checks the resolved IP on every connection
+// (including redirect hops) and honours GITLAB_ALLOWED_HOSTS for internal
+// repos. Redirects must stay on https.
+var helmRepoClient = &http.Client{
+	Timeout:   30 * time.Second,
+	Transport: gitLabHTTPTransport,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if req.URL.Scheme != "https" {
+			return fmt.Errorf("refusing redirect to non-https URL %s", req.URL)
+		}
+		if len(via) >= 5 {
+			return fmt.Errorf("stopped after 5 redirects")
+		}
+		return nil
+	},
+}
+
+func fetchVia(client *http.Client, url string, limit int64) (*http.Response, error) {
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +485,7 @@ func fetchHelmRepo(project Project) []Release {
 		return nil
 	}
 	indexURL := strings.TrimSuffix(project.RepoURL, "/") + "/index.yaml"
-	resp, err := fetch(indexURL, maxBodyLarge)
+	resp, err := fetchVia(helmRepoClient, indexURL, maxBodyLarge)
 	if err != nil {
 		log.Printf("⚠ Helm repo index error for %s: %v", project.Name, err)
 		return nil

@@ -383,6 +383,18 @@ func handleProjects(w http.ResponseWriter, r *http.Request, userID string) {
 			http.Error(w, "name, platform, and repo_url are required", http.StatusBadRequest)
 			return
 		}
+		if p.Platform == "helm-repo" {
+			// The one platform whose host is user-supplied. Fast-fail here; the
+			// dial-time guard in helmRepoClient is the actual boundary.
+			if !strings.HasPrefix(p.RepoURL, "https://") {
+				http.Error(w, "repo_url must start with https://", http.StatusBadRequest)
+				return
+			}
+			if err := validateOutboundURL(p.RepoURL, "repo_url"); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
 		repoID, err := store.AddRepo(userID, p)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
