@@ -14,6 +14,7 @@
 
 ## Done
 
+- [x] **Fix npm/PyPI version window** — both fetchers sorted version strings as text (so `9.0.0` outranked `10.0.0`) and could keep old versions while dropping new ones; they now keep the newest 10 stable + 5 prereleases by publish time (`newestReleases`), skip versions with no publish date instead of stamping them "now", and `experimental` builds count as prereleases (React's `0.0.0-experimental-*` channel was filling the whole window)
 - [x] **Helm repo SSRF guard** — Helm repo index fetches now use the dial-time-guarded transport (private/loopback/metadata addresses refused, https-only redirects, `GITLAB_ALLOWED_HOSTS` for internal repos); adding a `helm-repo` project with an unsafe URL is rejected up front
 - [x] **Fetcher response size caps** — all platform fetchers read through a capped `fetch()` (16 MiB; 64 MiB for npm packuments and Helm `index.yaml`, vs ~16 MB / ~7 MB largest seen), so a hostile or broken upstream can't exhaust memory
 - [x] **Migration table** — the 13 hand-written blocks in `store.go` became a `{version, stmts}` table in `migrations.go`; each step is transactional (a failure no longer leaves a half-applied column with the version unbumped); schema verified identical to the old code from every starting version

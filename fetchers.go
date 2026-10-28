@@ -68,6 +68,12 @@ func fetchGitHubReleases(project Project) []Release {
 	return releases
 }
 
+// Package-registry base URLs; vars so tests can point them at httptest servers.
+var (
+	npmRegistryURL = "https://registry.npmjs.org"
+	pypiBaseURL    = "https://pypi.org"
+)
+
 func fetchNPMVersions(project Project) []Release {
 	pkgName := project.Name
 	if strings.HasPrefix(project.RepoURL, "https://www.npmjs.com/package/") {
@@ -76,7 +82,7 @@ func fetchNPMVersions(project Project) []Release {
 		pkgName = "react" // legacy entry
 	}
 
-	url := fmt.Sprintf("https://registry.npmjs.org/%s", pkgName)
+	url := fmt.Sprintf("%s/%s", npmRegistryURL, pkgName)
 	resp, err := fetch(url, maxBodyLarge)
 	if err != nil {
 		log.Printf("⚠ NPM API error for %s: %v", project.Name, err)
@@ -104,23 +110,15 @@ func fetchNPMVersions(project Project) []Release {
 		return nil
 	}
 
-	var versions []string
-	for v := range npmData.Versions {
-		versions = append(versions, v)
-	}
-
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i] > versions[j]
-	})
-
 	var releases []Release
-	for i, v := range versions {
-		if i >= 10 {
-			break
+	for v := range npmData.Versions {
+		t, ok := npmData.Time[v]
+		if !ok {
+			continue // no publish time: can't place it, and a fake "now" would outrank real releases
 		}
-		pubTime := time.Now()
-		if t, ok := npmData.Time[v]; ok {
-			pubTime, _ = time.Parse(time.RFC3339, t)
+		pubTime, err := time.Parse(time.RFC3339, t)
+		if err != nil {
+			continue
 		}
 		releases = append(releases, Release{
 			ID:          fmt.Sprintf("npm_%s", v),
@@ -134,13 +132,13 @@ func fetchNPMVersions(project Project) []Release {
 		})
 	}
 
-	return releases
+	return newestReleases(releases)
 }
 
 func fetchPyPIReleases(project Project) []Release {
 	pkgName := project.Name
 
-	url := fmt.Sprintf("https://pypi.org/pypi/%s/json", pkgName)
+	url := fmt.Sprintf("%s/pypi/%s/json", pypiBaseURL, pkgName)
 	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ PyPI API error for %s: %v", project.Name, err)
@@ -164,23 +162,19 @@ func fetchPyPIReleases(project Project) []Release {
 		return nil
 	}
 
-	var versions []string
-	for v := range pypiData.Releases {
-		versions = append(versions, v)
-	}
-
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i] > versions[j]
-	})
-
 	var releases []Release
-	for i, v := range versions {
-		if i >= 10 {
-			break
+	for v, files := range pypiData.Releases {
+		// First upload is when the version was published. Versions with no
+		// files (all deleted) aren't installable, so they aren't releases.
+		var pubTime time.Time
+		for _, f := range files {
+			t, err := time.Parse(time.RFC3339, f.UploadTime)
+			if err == nil && (pubTime.IsZero() || t.Before(pubTime)) {
+				pubTime = t
+			}
 		}
-		pubTime := time.Now()
-		if uploads, ok := pypiData.Releases[v]; ok && len(uploads) > 0 {
-			pubTime, _ = time.Parse(time.RFC3339, uploads[0].UploadTime)
+		if pubTime.IsZero() {
+			continue
 		}
 		releases = append(releases, Release{
 			ID:          fmt.Sprintf("pypi_%s", v),
@@ -194,7 +188,7 @@ func fetchPyPIReleases(project Project) []Release {
 		})
 	}
 
-	return releases
+	return newestReleases(releases)
 }
 
 func fetchDockerTags(project Project) []Release {
@@ -306,7 +300,7 @@ func fetchGitLabReleases(project Project) []Release {
 
 var (
 	// prereleaseWord: alpha/beta/rc/... delimited by non-letters, e.g. "1.0.0-rc.1", "2.0-beta", "nightly".
-	prereleaseWord = regexp.MustCompile(`(?i)(^|[^a-z])(alpha|beta|rc|pre|preview|dev|canary|nightly|snapshot|next|unstable)([^a-z]|$)`)
+	prereleaseWord = regexp.MustCompile(`(?i)(^|[^a-z])(alpha|beta|rc|pre|preview|dev|canary|experimental|nightly|snapshot|next|unstable)([^a-z]|$)`)
 	// prereleaseShort: PEP 440 style "1.0a1", "1.0b2", "1.0rc1".
 	prereleaseShort = regexp.MustCompile(`(?i)\d(a|b|rc)\d+($|[.\-+_])`)
 )
@@ -361,6 +355,39 @@ func fetchVia(client *http.Client, url string, limit int64) (*http.Response, err
 	return resp, nil
 }
 
+const (
+	keepStable     = 10 // newest stable releases kept per project
+	keepPrerelease = 5  // newest prereleases kept, so a run of rc's can't crowd stable out
+)
+
+// newestReleases orders rels newest-published first (ties: higher version
+// string first, so output is deterministic despite map iteration upstream) and
+// keeps the newest keepStable stable and keepPrerelease prerelease entries.
+// Ordering by publish time sidesteps comparing semver/PEP 440 strings, where
+// plain string order puts "9.0.0" above "10.0.0".
+func newestReleases(rels []Release) []Release {
+	sort.Slice(rels, func(i, j int) bool {
+		if !rels[i].PublishedAt.Equal(rels[j].PublishedAt) {
+			return rels[i].PublishedAt.After(rels[j].PublishedAt)
+		}
+		return rels[i].Version > rels[j].Version
+	})
+	var out []Release
+	stable, pre := 0, 0
+	for _, r := range rels {
+		if r.Prerelease {
+			if pre < keepPrerelease {
+				pre++
+				out = append(out, r)
+			}
+		} else if stable < keepStable {
+			stable++
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -411,16 +438,16 @@ func fetchHelmArtifactHub(project Project) []Release {
 		prerelease bool
 	}
 
-	// Up to 10 stable plus 5 prereleases, so a run of rc's can't crowd stable out.
+	// Same window as newestReleases: keepStable stable plus keepPrerelease prereleases.
 	var stable []versionEntry
 	nStable, nPre := 0, 0
 	for _, v := range pkgData.AvailableVersions {
 		if v.Prerelease {
-			if nPre < 5 {
+			if nPre < keepPrerelease {
 				nPre++
 				stable = append(stable, versionEntry{v.Version, v.TS, true})
 			}
-		} else if nStable < 10 {
+		} else if nStable < keepStable {
 			nStable++
 			stable = append(stable, versionEntry{v.Version, v.TS, false})
 		}

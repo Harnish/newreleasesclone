@@ -11,7 +11,7 @@ import (
 
 func TestIsPrerelease(t *testing.T) {
 	pre := []string{"1.0.0-rc.1", "2.0.0-beta", "v3.1.0-alpha.2", "1.0a1", "1.0b2", "1.0rc1",
-		"1.0.dev3", "nightly", "next", "19.0.0-canary-abc", "0.0.0-experimental-dev-123", "1.2.3-SNAPSHOT"}
+		"1.0.dev3", "nightly", "next", "19.0.0-canary-abc", "0.0.0-experimental-dc9aed36-20261027", "1.2.3-SNAPSHOT"}
 	stable := []string{"1.0.0", "v2.3.4", "latest", "1.2.3-alpine", "3.9-slim-bookworm", "1.2.3-alpine3.18",
 		"10.0.0", "1.0.0+build5", "arc-1.0"}
 	for _, v := range pre {
