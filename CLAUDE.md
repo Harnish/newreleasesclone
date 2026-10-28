@@ -53,6 +53,8 @@ The HTML/CSS/JS frontend lives in `web/` (`index.html`, `app.css`, `app.js`), em
 
 **Concurrency:** All store mutations hold a write lock; reads use read lock. Goroutines are fire-and-forget for refresh operations.
 
+**Icons:** `icons.go` resolves a project's icon URL per platform (`iconURLFor`), downloads it through `guardedClient` (`fetchIcon`: content-sniffed, 512 KB cap), caches it in `repo_icons`, and serves it from `/api/icon` (auth + must track the repo; CSP sandbox for SVG). `RefreshProject` kicks `refreshIcon` in the background; `Project.IconVersion` tells the UI whether one exists.
+
 **Schema changes:** append a `{version, stmts}` entry to `migrations` in `migrations.go` (next consecutive version; never edit released ones). Each migration runs in one transaction with its `user_version` bump, so a failure rolls back. Table rebuilds set `fkOff`.
 
 **Prereleases:** `releases.is_prerelease` is set by the fetchers (`isPrerelease` heuristic where the API has no flag); `user_repos.include_prereleases` (default off) is per user per project. Read queries filter in SQL; notification senders filter per recipient with `Store.releasesFor`. Releases themselves are shared and always stored.
@@ -61,7 +63,7 @@ The HTML/CSS/JS frontend lives in `web/` (`index.html`, `app.css`, `app.js`), em
 
 **Port:** 8080 (hardcoded in `main.go`).
 
-**Security:** webhook, GitLab and Helm repo (`helmRepoClient`, the only fetcher with a user-supplied host) outbound requests go through the SSRF-guarded `gitLabHTTPTransport` (`GITLAB_ALLOWED_HOSTS` allowlists internal hosts). Login/register are rate limited in-memory (`allow`); set `TRUSTED_PROXY_CIDRS` behind a proxy so limits key on `X-Forwarded-For`.
+**Security:** webhook, GitLab and Helm repo (`guardedClient`, the only fetcher with a user-supplied host) outbound requests go through the SSRF-guarded `gitLabHTTPTransport` (`GITLAB_ALLOWED_HOSTS` allowlists internal hosts). Login/register are rate limited in-memory (`allow`); set `TRUSTED_PROXY_CIDRS` behind a proxy so limits key on `X-Forwarded-For`.
 
 **Max releases stored per project:** 50 (enforced in `AddRelease`).
 

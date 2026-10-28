@@ -14,7 +14,7 @@ func TestHelmRepoClientRefusesPrivateAddresses(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
 	defer srv.Close()
 
-	resp, err := fetchVia(helmRepoClient, srv.URL, 1024) // httptest listens on 127.0.0.1
+	resp, err := fetchVia(guardedClient, srv.URL, 1024) // httptest listens on 127.0.0.1
 	if err == nil {
 		resp.Body.Close()
 		t.Fatal("expected loopback to be refused")
@@ -29,7 +29,7 @@ func TestHelmRepoClientHonoursOperatorAllowlist(t *testing.T) {
 	defer srv.Close()
 	withAllowedHostForTests(t, "127.0.0.1")
 
-	resp, err := fetchVia(helmRepoClient, srv.URL, 1024)
+	resp, err := fetchVia(guardedClient, srv.URL, 1024)
 	if err != nil {
 		t.Fatalf("allowlisted host should be reachable: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestHelmRepoClientRefusesNonHTTPSRedirect(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := fetchVia(helmRepoClient, srv.URL, 1024)
+	resp, err := fetchVia(guardedClient, srv.URL, 1024)
 	if err == nil {
 		resp.Body.Close()
 		t.Fatal("expected redirect to a non-https URL to be refused")

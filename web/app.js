@@ -455,6 +455,25 @@ function apiJSON(r) {
 }
 
 // ---- Releases tab ----
+// Real icon when the server has one cached, else a letter badge in the platform's colour.
+function projIconHTML(proj, name, platform) {
+    var letter = ((name || '?').trim().charAt(0) || '?').toUpperCase();
+    if (proj && proj.icon_version) {
+        return '<img class="proj-icon" src="/api/icon?id=' + encodeURIComponent(proj.id) + '&v=' + Number(proj.icon_version) + '" ' +
+            'alt="" width="22" height="22" data-letter="' + esc(letter) + '" data-platform="' + esc(platform) + '" ' +
+            'onerror="iconFallback(this)">';
+    }
+    return '<span class="proj-icon letter ' + esc(platform) + '" aria-hidden="true">' + esc(letter) + '</span>';
+}
+
+function iconFallback(img) {
+    var span = document.createElement('span');
+    span.className = 'proj-icon letter ' + (img.dataset.platform || '');
+    span.setAttribute('aria-hidden', 'true');
+    span.textContent = img.dataset.letter || '?';
+    img.replaceWith(span);
+}
+
 function buildReleasesHTML(releases, projects) {
     if (!releases || releases.length === 0) {
         return '<div class="empty"><h3>No releases yet</h3><p>Add projects to start tracking.</p></div>';
@@ -515,6 +534,7 @@ function buildReleasesHTML(releases, projects) {
         return '<div class="card">' +
             '<div class="proj-header">' +
                 '<div class="proj-header-left">' +
+                    projIconHTML(proj, pname, platform) +
                     '<span class="proj-name">' + esc(pname) + '</span>' +
                     (platform ? '<span class="badge ' + esc(platform) + '">' + esc(platform) + '</span>' : '') +
                     backupLink +

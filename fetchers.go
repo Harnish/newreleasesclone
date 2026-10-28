@@ -324,11 +324,11 @@ func fetch(url string, limit int64) (*http.Response, error) {
 	return fetchVia(http.DefaultClient, url, limit)
 }
 
-// helmRepoClient is for Helm repo index URLs, the one fetch whose host is
-// user-supplied. Its transport re-checks the resolved IP on every connection
-// (including redirect hops) and honours GITLAB_ALLOWED_HOSTS for internal
-// repos. Redirects must stay on https.
-var helmRepoClient = &http.Client{
+// guardedClient is for fetches whose host is user-supplied: Helm repo indexes,
+// and icon downloads (their URLs can come from a Helm repo). Its transport
+// re-checks the resolved IP on every connection (including redirect hops) and
+// honours GITLAB_ALLOWED_HOSTS for internal repos. Redirects must stay on https.
+var guardedClient = &http.Client{
 	Timeout:   30 * time.Second,
 	Transport: gitLabHTTPTransport,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -343,7 +343,13 @@ var helmRepoClient = &http.Client{
 }
 
 func fetchVia(client *http.Client, url string, limit int64) (*http.Response, error) {
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	// Some hosts (Wikimedia, for one) reject Go's default User-Agent.
+	req.Header.Set("User-Agent", "newreleases/"+buildVersion()+" (+https://github.com/Harnish/newreleases)")
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -504,15 +510,18 @@ type helmChartVersion struct {
 	AppVersion string   `yaml:"appVersion"`
 	Created    string   `yaml:"created"`
 	URLs       []string `yaml:"urls"`
+	Icon       string   `yaml:"icon"`
 }
 
-func fetchHelmRepo(project Project) []Release {
+// helmRepoEntries downloads a Helm repo's index.yaml and returns the versions
+// of project.Name's chart, or nil (after logging why).
+func helmRepoEntries(project Project) []helmChartVersion {
 	if !strings.HasPrefix(project.RepoURL, "https://") {
 		log.Printf("⚠ Helm repo URL must use HTTPS: %s", project.RepoURL)
 		return nil
 	}
 	indexURL := strings.TrimSuffix(project.RepoURL, "/") + "/index.yaml"
-	resp, err := fetchVia(helmRepoClient, indexURL, maxBodyLarge)
+	resp, err := fetchVia(guardedClient, indexURL, maxBodyLarge)
 	if err != nil {
 		log.Printf("⚠ Helm repo index error for %s: %v", project.Name, err)
 		return nil
@@ -532,6 +541,14 @@ func fetchHelmRepo(project Project) []Release {
 	entries, ok := idx.Entries[project.Name]
 	if !ok || len(entries) == 0 {
 		log.Printf("⚠ Chart %q not found in Helm repo %s", project.Name, project.RepoURL)
+		return nil
+	}
+	return entries
+}
+
+func fetchHelmRepo(project Project) []Release {
+	entries := helmRepoEntries(project)
+	if entries == nil {
 		return nil
 	}
 

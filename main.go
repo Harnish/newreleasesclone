@@ -60,6 +60,7 @@ func main() {
 	http.HandleFunc("/verify-email", handleVerifyEmail)
 	http.HandleFunc("/feed/", handleFeed)
 	http.HandleFunc("/api/me", requireAuth(handleMe))
+	http.HandleFunc("/api/icon", requireAuth(handleIcon))
 	http.HandleFunc("/api/register", handleRegister)
 	http.HandleFunc("/api/login", handleLogin)
 	http.HandleFunc("/api/logout", handleLogout)

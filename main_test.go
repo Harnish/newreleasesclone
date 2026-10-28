@@ -1984,21 +1984,21 @@ func TestFetchHelmArtifactHubPrereleaseOnlyFallback(t *testing.T) {
 
 // disableHTTPSVerificationForTest temporarily disables TLS certificate verification
 // for the default HTTP client, needed for httptest.NewTLSServer with self-signed certs.
-// It does the same for helmRepoClient (the SSRF-guarded client Helm repo fetches use)
+// It does the same for guardedClient (the SSRF-guarded client Helm repo fetches use)
 // and lets loopback through its dial guard, since httptest servers bind 127.0.0.1.
 func disableHTTPSVerificationForTest() func() {
 	oldTransport := http.DefaultClient.Transport
 	http.DefaultClient.Transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	oldHelm := helmRepoClient.Transport
+	oldHelm := guardedClient.Transport
 	guarded := gitLabHTTPTransport.Clone()
 	guarded.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	helmRepoClient.Transport = guarded
+	guardedClient.Transport = guarded
 	allowLoopbackInTests.Store(true)
 	return func() {
 		http.DefaultClient.Transport = oldTransport
-		helmRepoClient.Transport = oldHelm
+		guardedClient.Transport = oldHelm
 		allowLoopbackInTests.Store(false)
 	}
 }

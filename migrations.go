@@ -155,6 +155,17 @@ var migrations = []migration{
 		`ALTER TABLE releases ADD COLUMN is_prerelease INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_repos ADD COLUMN include_prereleases INTEGER NOT NULL DEFAULT 0`,
 	}},
+	{version: 15, stmts: []string{
+		// One row per repo once an icon lookup has been attempted. data is NULL/empty
+		// when the platform has no icon; checked_at throttles re-lookups.
+		`CREATE TABLE repo_icons (
+			repo_id      TEXT PRIMARY KEY REFERENCES repos(id),
+			content_type TEXT NOT NULL DEFAULT '',
+			data         BLOB,
+			checked_at   INTEGER NOT NULL DEFAULT 0,
+			fetched_at   INTEGER NOT NULL DEFAULT 0
+		)`,
+	}},
 }
 
 func migrate(db *sql.DB) error { return runMigrations(db, migrations) }

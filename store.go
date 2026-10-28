@@ -881,9 +881,11 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled,
 		       ur.email_immediate, ur.include_prereleases,
 		       ur.gitlab_sync_enabled, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error,
-		       ur.gitlab_project_path
+		       ur.gitlab_project_path,
+		       CASE WHEN length(ri.data) > 0 THEN ri.fetched_at ELSE 0 END
 		FROM repos r
 		INNER JOIN user_repos ur ON ur.repo_id = r.id
+		LEFT JOIN repo_icons ri ON ri.repo_id = r.id
 		WHERE ur.user_id = ?
 		ORDER BY ur.created_at ASC`, userID)
 	if err != nil {
@@ -899,7 +901,7 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled,
 			&emailImmediate, &includePre,
 			&gitlabSyncEnabled, &p.GitLabSyncFrequency, &lastGitLabSync, &p.LastGitLabSyncError,
-			&p.GitLabProjectPath); err != nil {
+			&p.GitLabProjectPath, &p.IconVersion); err != nil {
 			log.Printf("⚠ Failed to scan project: %v", err)
 			continue
 		}
@@ -1173,6 +1175,7 @@ func (s *Store) RefreshProject(repoID string) {
 	}
 	s.MarkRefreshed(repoID)
 	log.Printf("✓ Refreshed %s: %d releases, latest %s", project.Name, len(releases), releases[0].Version)
+	go s.refreshIcon(project)
 
 	// Notify subscribers about genuinely new releases (skip first-ever fetch).
 	if len(existingIDs) > 0 {
