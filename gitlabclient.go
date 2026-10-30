@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -241,12 +242,32 @@ func (c *GitLabClient) do(method, path string, reqBody, out any) (int, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return resp.StatusCode, authError(method, path, resp)
+	}
 	if out != nil && resp.StatusCode < 300 {
 		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 			return resp.StatusCode, fmt.Errorf("decode response for %s %s: %w", method, path, err)
 		}
 	}
 	return resp.StatusCode, nil
+}
+
+// authError explains a 401/403, which otherwise surfaces as a bare status:
+// GitLab's own reason, plus the usual cause (a token that can't write).
+func authError(method, path string, resp *http.Response) error {
+	var body struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+		Desc    string `json:"error_description"`
+	}
+	json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body)
+	reason := strings.TrimSpace(strings.Join([]string{body.Message, body.Error, body.Desc}, " "))
+	if reason == "" {
+		reason = http.StatusText(resp.StatusCode)
+	}
+	return fmt.Errorf("gitlab rejected %s %s with %d (%s): the token must be a personal access token with the \"api\" scope that hasn't expired or been revoked; project and group access tokens can't create projects",
+		method, path, resp.StatusCode, reason)
 }
 
 var disallowedIPRanges = mustParseCIDRs(

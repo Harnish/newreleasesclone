@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -223,5 +224,18 @@ func TestSlugify(t *testing.T) {
 		if got := slugify(tt.in); got != tt.want {
 			t.Errorf("slugify(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestGitLabClientExplainsAuthFailures(t *testing.T) {
+	withLoopbackAllowedForTests(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"message": "401 Unauthorized"}`)
+	}))
+	defer srv.Close()
+	_, err := newGitLabClient(srv.URL, "tok").CreateProject(0, "awesome")
+	if err == nil || !strings.Contains(err.Error(), "401 Unauthorized") || !strings.Contains(err.Error(), `"api" scope`) {
+		t.Fatalf("err = %v, want GitLab's reason and the scope hint", err)
 	}
 }
