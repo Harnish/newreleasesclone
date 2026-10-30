@@ -10,6 +10,8 @@ import (
 func TestFrontendServed(t *testing.T) {
 	cases := []struct{ path, ctype, want string }{
 		{"/", "text/html", `src="/static/app.js"`},
+		{"/", "text/html", `href="/static/favicon.svg"`},
+		{"/static/favicon.svg", "image/svg+xml", "<svg"},
 		{"/static/app.js", "javascript", "function esc("},
 		{"/static/app.css", "text/css", ".pagination"},
 	}
