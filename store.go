@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -29,6 +30,8 @@ type Store struct {
 	db        *sql.DB
 	vapidPub  string
 	vapidPriv string
+
+	gitlabSyncing sync.Map // "user/repo" -> struct{} while a GitLab sync for it runs
 }
 
 type pushSub struct {

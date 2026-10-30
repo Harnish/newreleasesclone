@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -283,5 +284,43 @@ func TestDoSyncAdoptsExistingPersonalProject(t *testing.T) {
 	}
 	if created {
 		t.Fatal("tried to create a project that already exists")
+	}
+}
+
+// A second sync for the same project is skipped while one is running, so two
+// of them can't race to create the mirror project.
+func TestSyncProjectToGitLabSkipsWhenAlreadyRunning(t *testing.T) {
+	withLoopbackAllowedForTests(t)
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+	repoID, _ := s.AddRepo(userID, Project{Name: "repo", Platform: "github", RepoURL: "https://github.com/o/r"})
+
+	entered, release := make(chan struct{}), make(chan struct{})
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			close(entered)
+		}
+		<-release
+		w.WriteHeader(http.StatusInternalServerError) // the first sync just needs to fail eventually
+	}))
+	defer srv.Close()
+
+	target := GitLabSyncTarget{UserID: userID, RepoID: repoID, RepoName: "repo", RepoURL: "https://github.com/o/r",
+		Platform: "github", GitLabURL: srv.URL, GitLabToken: "tok"}
+	done := make(chan struct{})
+	go func() { s.syncProjectToGitLab(target); close(done) }()
+	<-entered
+
+	s.syncProjectToGitLab(target) // returns at once; would otherwise block on the server
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("server hit %d times, want 1 (second sync should be skipped)", got)
+	}
+	close(release)
+	<-done
+
+	s.syncProjectToGitLab(target) // finished, so a later sync runs again
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("server hit %d times after the first finished, want 2", got)
 	}
 }
