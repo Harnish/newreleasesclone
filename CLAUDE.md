@@ -11,6 +11,9 @@ go build -o newreleases main.go
 # Run all tests with race detection
 go test -v -race
 
+# Tests live next to what they cover (store_test.go, handlers_projects_test.go, email_test.go, ...);
+# shared helpers (newTestStore, newTestAuth) are in testhelpers_test.go
+
 # Run a single test
 go test -v -run TestStoreAddProject ./...
 
@@ -31,10 +34,10 @@ docker-compose up
 
 ## Architecture
 
-`main.go` (~1,300 lines) is the entire backend — no packages, no external frameworks.
+Single `main` package, split by concern: `main.go` (wiring/routes), `handlers.go` (HTTP), `store.go` (SQLite queries), `migrations.go` (schema), `fetchers.go` (platform APIs), `ui.go` (`go:embed` of `web/`), `email.go`, `scheduler.go`, `gitlab*.go`/`gitmirror.go`/`awesome.go` (GitLab sync), `models.go`.
 
 **Core types:**
-- `Store` — thread-safe state container using `sync.RWMutex`; holds projects, releases, and refresh timestamps; persists to `state.json`
+- `Store` — thread-safe state container using `sync.RWMutex`; wraps the SQLite DB (users, sessions, repos, releases, webhooks, settings)
 - `Project` — a tracked repo/package (ID, name, platform, URL, refresh stats)
 - `Release` — a version entry with truncated description (200 chars) and full `ReleaseNotes`
 
@@ -43,19 +46,27 @@ docker-compose up
 - `GET /api/releases`
 - `POST /api/refresh?id=<id>`, `GET /api/refresh-check`
 
-The HTML/CSS/JS frontend is embedded as string constants in `main.go` — no build step, no bundler.
+The HTML/CSS/JS frontend lives in `web/` (`index.html`, `app.css`, `app.js`), embedded with `go:embed` and served at `/` and `/static/` — no build step, no bundler. Edit those files directly; they are plain browser JS (inline `onclick=` handlers rely on globals).
 
 **Refresh system:** Projects are "stale" after 30 minutes. `GET /api/refresh-check` triggers background goroutines for all stale projects. All `RefreshProject` calls are non-blocking (`go store.RefreshProject(...)`). After each refresh, `SaveState()` persists to `state.json`.
 
-**Platform fetchers** (`fetchGitHubReleases`, `fetchNPMVersions`, `fetchPyPIReleases`, `fetchDockerTags`, `fetchGitLabReleases`) are standalone functions called from `RefreshProject` based on `project.Platform`. GitHub returns up to 30 releases (stable-first); others return 10.
+**Platform fetchers** read through `fetch(url, limit)` (capped body; use it, not bare `http.Get`): (`fetchGitHubReleases`, `fetchNPMVersions`, `fetchPyPIReleases`, `fetchDockerTags`, `fetchGitLabReleases`) are standalone functions called from `RefreshProject` based on `project.Platform`. GitHub returns up to 30 releases (stable-first); others return 10.
 
 **State persistence:** SQLite database at `data/newreleases.db`. Created on startup; seeded with 3 demo projects (kubernetes, react, golang) if fewer than 3 exist. Uses `modernc.org/sqlite` (pure Go, no CGO required). WAL mode enabled; writes serialized through a single connection.
 
 **Concurrency:** All store mutations hold a write lock; reads use read lock. Goroutines are fire-and-forget for refresh operations.
 
+**Icons:** `icons.go` resolves a project's icon URL per platform (`iconURLFor`), downloads it through `guardedClient` (`fetchIcon`: content-sniffed, 512 KB cap), caches it in `repo_icons`, and serves it from `/api/icon` (auth + must track the repo; CSP sandbox for SVG). `RefreshProject` kicks `refreshIcon` in the background; `Project.IconVersion` tells the UI whether one exists.
+
+**Schema changes:** append a `{version, stmts}` entry to `migrations` in `migrations.go` (next consecutive version; never edit released ones). Each migration runs in one transaction with its `user_version` bump, so a failure rolls back. Table rebuilds set `fkOff`.
+
+**Prereleases:** `releases.is_prerelease` is set by the fetchers (`isPrerelease` heuristic where the API has no flag); `user_repos.include_prereleases` (default off) is per user per project. Read queries filter in SQL; notification senders filter per recipient with `Store.releasesFor`. Releases themselves are shared and always stored.
+
 **Release IDs** are platform-prefixed (`gh_<id>`, `npm_<version>`, `docker_<tag>`) to prevent duplicates on re-fetch.
 
-**Port:** 8080 (hardcoded near EOF of `main.go`).
+**Port:** 8080 (hardcoded in `main.go`).
+
+**Security:** webhook, GitLab and Helm repo (`guardedClient`, the only fetcher with a user-supplied host) outbound requests go through the SSRF-guarded `gitLabHTTPTransport` (`GITLAB_ALLOWED_HOSTS` allowlists internal hosts). Login/register are rate limited in-memory (`allow`); set `TRUSTED_PROXY_CIDRS` behind a proxy so limits key on `X-Forwarded-For`.
 
 **Max releases stored per project:** 50 (enforced in `AddRelease`).
 

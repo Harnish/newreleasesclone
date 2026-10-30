@@ -7,13 +7,18 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub, Helm (Artifact Hub & custom repos)
 - **User accounts**: Register/login with session-based auth; each user tracks their own set of projects
 - **Shared release data**: Two users adding the same repo share one set of fetched releases
+- **Build info**: the running build's commit SHA is shown in the bottom-right corner (set via the `GIT_SHA` build arg; `docker-compose` reads it from your environment, e.g. `GIT_SHA=$(git rev-parse --short HEAD) docker-compose up --build`)
+- **Prereleases**: Alpha/beta/rc versions are detected per platform and hidden by default. Turn on "Include prereleases" in a project's settings panel to see them (marked `pre`) and get notified about them. Webhook payloads include a `prerelease` flag per release. npm and PyPI keep the 10 newest stable releases plus the 5 newest prereleases, ordered by publish date. Detection uses the platform's own flag where there is one (GitHub, GitLab, Artifact Hub) and a version-string heuristic for npm, PyPI, Docker and Helm repos
+- **Project icons**: GitHub owner avatars, GitLab project avatars, Artifact Hub logos and Helm chart icons appear next to project names; npm, PyPI and Docker projects get a letter badge. Icons are downloaded and cached by the server (re-checked weekly) and served from `/api/icon`, so your browser never contacts GitHub or other third parties for them
+- **Sorting**: Order projects by latest release (default), date added, or name; the choice is remembered in your browser and applies across pages
 - **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
 - **Browser push notifications**: Click 🔔 in the header to subscribe; notifications fire when a new release is detected on any tracked repo
 - **Email notifications**: Opt-in per project — a daily digest of the previous day's releases, and/or an immediate plain-text email the moment a new release is detected (requires SMTP configured and a verified email)
-- **Webhooks**: Per-project outbound webhooks with optional HMAC-SHA256 signing; managed inline from the Projects tab
+- **Webhooks**: Per-project outbound webhooks with optional HMAC-SHA256 signing; managed inline from the Projects tab. Delivery uses the same SSRF guard as GitLab sync (private/loopback addresses refused, redirects not followed)
 - **GitLab sync**: Register your own GitLab instance + API token (Account Settings), then opt any GitHub/GitLab project into a daily/weekly/monthly mirror push. Optional "Awesome" README, grouped by platform, auto-generated and pushed to a GitLab project under your namespace
 - **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
 - **Full release notes**: GitHub/GitLab release bodies captured and expandable in the UI
+- **Accessible UI**: keyboard focus rings, screen-reader labels, AA-contrast text, touch-friendly controls on phones
 - **SQLite persistence**: All data stored in `data/newreleases.db`
 
 ## Running
@@ -30,7 +35,8 @@ Register an account on first visit, then add projects to track.
 
 | Variable | Purpose |
 |----------|---------|
-| `GITLAB_ALLOWED_HOSTS` | Comma-separated hostnames exempt from the GitLab sync SSRF guard (`gitlab_url` normally cannot resolve to a private/loopback/link-local/CGNAT address). Set this if your own GitLab instance resolves to a private IP from where newreleases runs — e.g. split-horizon DNS, or a Kubernetes service name/ClusterIP when both run in the same cluster. Example: `GITLAB_ALLOWED_HOSTS=gitlab.example.internal,gitlab.default.svc.cluster.local`. Operator-set only — not exposed to end users. |
+| `GITLAB_ALLOWED_HOSTS` | Comma-separated hostnames exempt from the outbound SSRF guard. The guard applies to GitLab sync (`gitlab_url`), webhook URLs and Helm repo URLs, none of which may normally resolve to a private/loopback/link-local/CGNAT address. Set this if your own GitLab instance, webhook receiver or Helm repo resolves to a private IP from where newreleases runs — e.g. split-horizon DNS, or a Kubernetes service name/ClusterIP when both run in the same cluster. Example: `GITLAB_ALLOWED_HOSTS=gitlab.example.internal,gitlab.default.svc.cluster.local`. Operator-set only — not exposed to end users. |
+| `TRUSTED_PROXY_CIDRS` | Comma-separated CIDRs of your reverse proxy/ingress. Login/register rate limits key on the rightmost `X-Forwarded-For` entry (assumes one proxy hop) only when the connection comes from one of these; otherwise the connection address is used. Unset by default. Behind a proxy without it, every user shares the proxy's IP and its limits. Example: `TRUSTED_PROXY_CIDRS=10.42.0.0/16`. |
 
 ## Adding Projects
 
@@ -122,7 +128,8 @@ Uses a `local-path` PVC to persist `data/` across pod restarts.
 | `store.go` | SQLite layer — users, sessions, repos, releases |
 | `fetchers.go` | Per-platform release fetchers |
 | `models.go` | `User`, `Project`, `Release`, `GitLabSettings`, `GitLabSyncTarget` structs |
-| `ui.go` | Embedded HTML/CSS/JS frontend |
+| `ui.go` | `go:embed` wiring + `/static/` handler for the frontend |
+| `web/` | Frontend source: `index.html`, `app.css`, `app.js` (embedded into the binary) |
 | `gitlabclient.go` | GitLab REST v4 client (project create/lookup, authenticated push URL) |
 | `gitmirror.go` | Ephemeral `git clone --mirror` / push primitives (`os/exec`, no persistent clone dir) |
 | `gitlabsync.go` | Per-project sync orchestration |

@@ -74,261 +74,6 @@ func NewStore(dbPath string) (*Store, error) {
 	return &Store{db: db, vapidPub: pub, vapidPriv: priv}, nil
 }
 
-func migrate(db *sql.DB) error {
-	var version int
-	db.QueryRow("PRAGMA user_version").Scan(&version)
-
-	if version < 2 {
-		// Drop v1 schema (projects + old releases) so we can recreate cleanly.
-		db.Exec("DROP TABLE IF EXISTS releases")
-		db.Exec("DROP TABLE IF EXISTS projects")
-
-		if _, err := db.Exec(`
-			CREATE TABLE IF NOT EXISTS users (
-				id            TEXT PRIMARY KEY,
-				username      TEXT NOT NULL UNIQUE,
-				password_hash TEXT NOT NULL,
-				created_at    TEXT NOT NULL DEFAULT ''
-			);
-			CREATE TABLE IF NOT EXISTS sessions (
-				id         TEXT PRIMARY KEY,
-				user_id    TEXT NOT NULL REFERENCES users(id),
-				expires_at TEXT NOT NULL
-			);
-			CREATE TABLE IF NOT EXISTS repos (
-				id            TEXT PRIMARY KEY,
-				platform      TEXT NOT NULL,
-				repo_url      TEXT NOT NULL,
-				name          TEXT NOT NULL,
-				last_refresh  TEXT NOT NULL DEFAULT '',
-				refresh_count INTEGER NOT NULL DEFAULT 0,
-				UNIQUE(platform, repo_url)
-			);
-			CREATE TABLE IF NOT EXISTS user_repos (
-				user_id    TEXT NOT NULL REFERENCES users(id),
-				repo_id    TEXT NOT NULL REFERENCES repos(id),
-				created_at TEXT NOT NULL DEFAULT '',
-				PRIMARY KEY (user_id, repo_id)
-			);
-			CREATE TABLE IF NOT EXISTS releases (
-				id            TEXT NOT NULL,
-				repo_id       TEXT NOT NULL REFERENCES repos(id),
-				name          TEXT NOT NULL,
-				version       TEXT NOT NULL,
-				platform      TEXT NOT NULL,
-				url           TEXT NOT NULL,
-				published_at  TEXT NOT NULL DEFAULT '',
-				description   TEXT NOT NULL DEFAULT '',
-				release_notes TEXT NOT NULL DEFAULT '',
-				PRIMARY KEY (id, repo_id)
-			);
-		`); err != nil {
-			return fmt.Errorf("failed to create schema: %w", err)
-		}
-
-		if _, err := db.Exec("PRAGMA user_version = 2"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 3 {
-		if _, err := db.Exec(`
-			CREATE TABLE IF NOT EXISTS config (
-				key   TEXT PRIMARY KEY,
-				value TEXT NOT NULL
-			);
-			CREATE TABLE IF NOT EXISTS push_subscriptions (
-				id         TEXT PRIMARY KEY,
-				user_id    TEXT NOT NULL REFERENCES users(id),
-				endpoint   TEXT NOT NULL,
-				p256dh     TEXT NOT NULL,
-				auth       TEXT NOT NULL,
-				created_at TEXT NOT NULL DEFAULT '',
-				UNIQUE(user_id, endpoint)
-			);
-		`); err != nil {
-			return fmt.Errorf("failed to migrate to v3: %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 3"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 4 {
-		if _, err := db.Exec(`
-			CREATE TABLE IF NOT EXISTS webhooks (
-				id         TEXT PRIMARY KEY,
-				user_id    TEXT NOT NULL REFERENCES users(id),
-				repo_id    TEXT NOT NULL REFERENCES repos(id),
-				url        TEXT NOT NULL,
-				secret     TEXT NOT NULL DEFAULT '',
-				created_at TEXT NOT NULL DEFAULT ''
-			);
-		`); err != nil {
-			return fmt.Errorf("failed to migrate to v4: %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 4"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 5 {
-		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN push_enabled INTEGER NOT NULL DEFAULT 1`); err != nil {
-			return fmt.Errorf("failed to migrate to v5: %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 5"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 6 {
-		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("failed to migrate to v6 (email): %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`); err != nil {
-			return fmt.Errorf("failed to migrate to v6 (email_verified): %w", err)
-		}
-		if _, err := db.Exec(`
-			CREATE TABLE IF NOT EXISTS email_verification_tokens (
-				token      TEXT PRIMARY KEY,
-				user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-				expires_at TEXT NOT NULL
-			)
-		`); err != nil {
-			return fmt.Errorf("failed to migrate to v6 (tokens table): %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 6"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 7 {
-		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN email_digest INTEGER NOT NULL DEFAULT 0`); err != nil {
-			return fmt.Errorf("failed to migrate to v7 (email_digest): %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 7"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 8 {
-		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN rss_token TEXT`); err != nil {
-			return fmt.Errorf("failed to migrate to v8 (rss_token): %w", err)
-		}
-		if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_rss_token ON users(rss_token) WHERE rss_token IS NOT NULL`); err != nil {
-			return fmt.Errorf("failed to create rss_token index: %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 8"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 9 {
-		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN page_size INTEGER NOT NULL DEFAULT 10`); err != nil {
-			return fmt.Errorf("failed to migrate to v9 (page_size): %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 9"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 10 {
-		if _, err := db.Exec(`PRAGMA foreign_keys=OFF`); err != nil {
-			return fmt.Errorf("failed to disable FK for v10: %w", err)
-		}
-		if _, err := db.Exec(`
-			CREATE TABLE users_new (
-				id             TEXT PRIMARY KEY,
-				email          TEXT NOT NULL UNIQUE,
-				password_hash  TEXT NOT NULL,
-				created_at     TEXT NOT NULL DEFAULT '',
-				email_verified INTEGER NOT NULL DEFAULT 0,
-				email_digest   INTEGER NOT NULL DEFAULT 0,
-				rss_token      TEXT,
-				page_size      INTEGER NOT NULL DEFAULT 10
-			)
-		`); err != nil {
-			return fmt.Errorf("failed to migrate to v10 (create users_new): %w", err)
-		}
-		if _, err := db.Exec(`
-			INSERT INTO users_new (id, email, password_hash, created_at, email_verified, email_digest, rss_token, page_size)
-			SELECT id, email, password_hash, created_at, email_verified, email_digest, rss_token, page_size
-			FROM users
-		`); err != nil {
-			return fmt.Errorf("failed to migrate to v10 (copy users): %w", err)
-		}
-		if _, err := db.Exec(`DROP TABLE users`); err != nil {
-			return fmt.Errorf("failed to migrate to v10 (drop users): %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE users_new RENAME TO users`); err != nil {
-			return fmt.Errorf("failed to migrate to v10 (rename users_new): %w", err)
-		}
-		if _, err := db.Exec(`PRAGMA foreign_keys=ON`); err != nil {
-			return fmt.Errorf("failed to re-enable FK for v10: %w", err)
-		}
-		if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_rss_token ON users(rss_token) WHERE rss_token IS NOT NULL`); err != nil {
-			return fmt.Errorf("failed to migrate to v10 (rss_token index): %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 10"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 11 {
-		if _, err := db.Exec(`
-			CREATE TABLE IF NOT EXISTS gitlab_settings (
-				user_id             TEXT PRIMARY KEY REFERENCES users(id),
-				gitlab_url          TEXT NOT NULL DEFAULT '',
-				gitlab_token        TEXT NOT NULL DEFAULT '',
-				awesome_enabled     INTEGER NOT NULL DEFAULT 0,
-				awesome_repo_name   TEXT NOT NULL DEFAULT '',
-				awesome_gitlab_path TEXT NOT NULL DEFAULT '',
-				updated_at          TEXT NOT NULL DEFAULT ''
-			);
-		`); err != nil {
-			return fmt.Errorf("failed to migrate to v11 (gitlab_settings table): %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN gitlab_sync_enabled INTEGER NOT NULL DEFAULT 0`); err != nil {
-			return fmt.Errorf("failed to migrate to v11 (gitlab_sync_enabled): %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN gitlab_sync_frequency TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("failed to migrate to v11 (gitlab_sync_frequency): %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN gitlab_project_path TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("failed to migrate to v11 (gitlab_project_path): %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN last_gitlab_sync_at TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("failed to migrate to v11 (last_gitlab_sync_at): %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN last_gitlab_sync_error TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("failed to migrate to v11 (last_gitlab_sync_error): %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 11"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 12 {
-		if _, err := db.Exec(`ALTER TABLE gitlab_settings ADD COLUMN gitlab_group TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("failed to migrate to v12 (gitlab_group): %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 12"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	if version < 13 {
-		if _, err := db.Exec(`ALTER TABLE user_repos ADD COLUMN email_immediate INTEGER NOT NULL DEFAULT 0`); err != nil {
-			return fmt.Errorf("failed to migrate to v13 (email_immediate): %w", err)
-		}
-		if _, err := db.Exec("PRAGMA user_version = 13"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-	}
-
-	return nil
-}
-
 // ---- VAPID / Push ----
 
 func getOrCreateVAPIDKeys(db *sql.DB) (pub, priv string, err error) {
@@ -386,20 +131,23 @@ func (s *Store) sendPushNotifications(repoID, projectName string, newReleases []
 		return
 	}
 
-	latest := newReleases[0]
-	var body string
-	if len(newReleases) == 1 {
-		body = latest.Version + " is now available"
-	} else {
-		body = fmt.Sprintf("%d new releases, latest %s", len(newReleases), latest.Version)
-	}
-	payload, _ := json.Marshal(map[string]string{
-		"title": projectName + " — new release",
-		"body":  body,
-		"url":   latest.URL,
-	})
-
 	for _, sub := range subs {
+		rels := s.releasesFor(sub.UserID, repoID, newReleases)
+		if len(rels) == 0 {
+			continue
+		}
+		latest := rels[0]
+		var body string
+		if len(rels) == 1 {
+			body = latest.Version + " is now available"
+		} else {
+			body = fmt.Sprintf("%d new releases, latest %s", len(rels), latest.Version)
+		}
+		payload, _ := json.Marshal(map[string]string{
+			"title": projectName + " — new release",
+			"body":  body,
+			"url":   latest.URL,
+		})
 		resp, err := webpush.SendNotification(payload, &webpush.Subscription{
 			Endpoint: sub.Endpoint,
 			Keys:     webpush.Keys{Auth: sub.Auth, P256dh: sub.P256dh},
@@ -484,6 +232,43 @@ func (s *Store) SetProjectEmailImmediate(userID, repoID string, enabled bool) (b
 	return n > 0, nil
 }
 
+func (s *Store) SetProjectIncludePrereleases(userID, repoID string, enabled bool) (bool, error) {
+	res, err := s.db.Exec(
+		"UPDATE user_repos SET include_prereleases = ? WHERE user_id = ? AND repo_id = ?",
+		boolInt(enabled), userID, repoID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// releasesFor drops prereleases unless the user opted in for this project.
+// Notification senders call it per recipient, since releases are shared.
+func (s *Store) releasesFor(userID, repoID string, rels []Release) []Release {
+	var include int
+	s.db.QueryRow("SELECT include_prereleases FROM user_repos WHERE user_id = ? AND repo_id = ?",
+		userID, repoID).Scan(&include)
+	if include != 0 {
+		return rels
+	}
+	var stable []Release
+	for _, r := range rels {
+		if !r.Prerelease {
+			stable = append(stable, r)
+		}
+	}
+	return stable
+}
+
 func (s *Store) getImmediateEmailUsersForRepo(repoID string) ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT u.id, u.email, u.email_verified
@@ -521,8 +306,8 @@ func (s *Store) sendImmediateEmails(repoID string, project Project, newReleases 
 		return
 	}
 
-	for _, release := range newReleases {
-		for _, u := range users {
+	for _, u := range users {
+		for _, release := range s.releasesFor(u.ID, repoID, newReleases) {
 			if err := smtpCfg.SendReleaseEmail(u.Email, project, release); err != nil {
 				log.Printf("⚠ sendImmediateEmails: failed to send to %s: %v", u.Email, err)
 			}
@@ -701,28 +486,25 @@ func scanGitLabSyncTargets(rows *sql.Rows) []GitLabSyncTarget {
 	return targets
 }
 
-func (s *Store) getWebhooksForRepo(repoID string) []struct {
+type webhookTarget struct {
 	wh     Webhook
 	secret string
-} {
-	rows, err := s.db.Query(`SELECT id, repo_id, url, secret FROM webhooks WHERE repo_id = ?`, repoID)
+	userID string
+}
+
+func (s *Store) getWebhooksForRepo(repoID string) []webhookTarget {
+	rows, err := s.db.Query(`SELECT id, repo_id, url, secret, user_id FROM webhooks WHERE repo_id = ?`, repoID)
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
-	var results []struct {
-		wh     Webhook
-		secret string
-	}
+	var results []webhookTarget
 	for rows.Next() {
-		var id, rid, u, sec string
-		if err := rows.Scan(&id, &rid, &u, &sec); err != nil {
+		var id, rid, u, sec, uid string
+		if err := rows.Scan(&id, &rid, &u, &sec, &uid); err != nil {
 			continue
 		}
-		results = append(results, struct {
-			wh     Webhook
-			secret string
-		}{Webhook{ID: id, RepoID: rid, URL: u, HasSecret: sec != ""}, sec})
+		results = append(results, webhookTarget{Webhook{ID: id, RepoID: rid, URL: u, HasSecret: sec != ""}, sec, uid})
 	}
 	return results
 }
@@ -753,28 +535,43 @@ func (s *Store) sendWebhooks(repoID string, project Project, newReleases []Relea
 		URL         string `json:"url"`
 		PublishedAt string `json:"published_at"`
 		Description string `json:"description,omitempty"`
+		Prerelease  bool   `json:"prerelease"`
 	}
-	relPayloads := make([]releasePayload, len(newReleases))
-	for i, r := range newReleases {
-		relPayloads[i] = releasePayload{
-			Version:     r.Version,
-			URL:         r.URL,
-			PublishedAt: r.PublishedAt.Format(time.RFC3339),
-			Description: r.Description,
+	payloadFor := func(rels []Release) []byte {
+		relPayloads := make([]releasePayload, len(rels))
+		for i, r := range rels {
+			relPayloads[i] = releasePayload{
+				Version:     r.Version,
+				URL:         r.URL,
+				PublishedAt: r.PublishedAt.Format(time.RFC3339),
+				Description: r.Description,
+				Prerelease:  r.Prerelease,
+			}
 		}
+		body, _ := json.Marshal(map[string]interface{}{
+			"project": map[string]string{
+				"id":       project.ID,
+				"name":     project.Name,
+				"platform": project.Platform,
+				"repo_url": project.RepoURL,
+			},
+			"releases": relPayloads,
+		})
+		return body
 	}
-	body, _ := json.Marshal(map[string]interface{}{
-		"project": map[string]string{
-			"id":       project.ID,
-			"name":     project.Name,
-			"platform": project.Platform,
-			"repo_url": project.RepoURL,
-		},
-		"releases": relPayloads,
-	})
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// Reuse the GitLab SSRF-guarded transport: webhook URLs are user-supplied.
+	client := &http.Client{
+		Timeout:       10 * time.Second,
+		Transport:     gitLabHTTPTransport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	for _, entry := range hooks {
+		rels := s.releasesFor(entry.userID, repoID, newReleases)
+		if len(rels) == 0 {
+			continue
+		}
+		body := payloadFor(rels)
 		req, err := http.NewRequest(http.MethodPost, entry.wh.URL, bytes.NewReader(body))
 		if err != nil {
 			log.Printf("⚠ Webhook bad URL %s: %v", entry.wh.URL, err)
@@ -961,10 +758,11 @@ func (s *Store) GetReleasesPublishedOn(userID string, date time.Time) []Release 
 	to := time.Date(date.Year(), date.Month(), date.Day()+1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
 	rows, err := s.db.Query(`
 		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url,
-		       r.published_at, r.description, r.release_notes
+		       r.published_at, r.description, r.release_notes, r.is_prerelease
 		FROM releases r
 		INNER JOIN user_repos ur ON ur.repo_id = r.repo_id
 		WHERE ur.user_id = ?
+		  AND (r.is_prerelease = 0 OR ur.include_prereleases = 1)
 		  AND r.published_at >= ?
 		  AND r.published_at < ?
 		ORDER BY r.name ASC, r.published_at DESC`, userID, from, to)
@@ -1081,11 +879,13 @@ func (s *Store) RemoveUserRepo(userID, repoID string) bool {
 func (s *Store) GetUserRepos(userID string) []Project {
 	rows, err := s.db.Query(`
 		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled,
-		       ur.email_immediate,
+		       ur.email_immediate, ur.include_prereleases,
 		       ur.gitlab_sync_enabled, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error,
-		       ur.gitlab_project_path
+		       ur.gitlab_project_path,
+		       CASE WHEN length(ri.data) > 0 THEN ri.fetched_at ELSE 0 END
 		FROM repos r
 		INNER JOIN user_repos ur ON ur.repo_id = r.id
+		LEFT JOIN repo_icons ri ON ri.repo_id = r.id
 		WHERE ur.user_id = ?
 		ORDER BY ur.created_at ASC`, userID)
 	if err != nil {
@@ -1097,11 +897,11 @@ func (s *Store) GetUserRepos(userID string) []Project {
 	for rows.Next() {
 		var p Project
 		var lastRefresh, lastGitLabSync string
-		var pushEnabled, emailImmediate, gitlabSyncEnabled int
+		var pushEnabled, emailImmediate, includePre, gitlabSyncEnabled int
 		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled,
-			&emailImmediate,
+			&emailImmediate, &includePre,
 			&gitlabSyncEnabled, &p.GitLabSyncFrequency, &lastGitLabSync, &p.LastGitLabSyncError,
-			&p.GitLabProjectPath); err != nil {
+			&p.GitLabProjectPath, &p.IconVersion); err != nil {
 			log.Printf("⚠ Failed to scan project: %v", err)
 			continue
 		}
@@ -1113,6 +913,7 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		}
 		p.PushEnabled = pushEnabled != 0
 		p.EmailImmediate = emailImmediate != 0
+		p.IncludePrereleases = includePre != 0
 		p.GitLabSyncEnabled = gitlabSyncEnabled != 0
 		projects = append(projects, p)
 	}
@@ -1122,7 +923,7 @@ func (s *Store) GetUserRepos(userID string) []Project {
 // GetReleases returns all releases for a specific repo (used for testing).
 func (s *Store) GetReleases(repoID string) []Release {
 	rows, err := s.db.Query(`
-		SELECT id, repo_id, name, version, platform, url, published_at, description, release_notes
+		SELECT id, repo_id, name, version, platform, url, published_at, description, release_notes, is_prerelease
 		FROM releases WHERE repo_id = ? ORDER BY published_at DESC`, repoID)
 	if err != nil {
 		return nil
@@ -1162,10 +963,11 @@ func scanProjects(rows *sql.Rows) []Project {
 
 func (s *Store) GetUserReleases(userID string) []Release {
 	rows, err := s.db.Query(`
-		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes
+		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes, r.is_prerelease
 		FROM releases r
 		INNER JOIN user_repos ur ON ur.repo_id = r.repo_id
 		WHERE ur.user_id = ?
+		  AND (r.is_prerelease = 0 OR ur.include_prereleases = 1)
 		ORDER BY r.published_at DESC`, userID)
 	if err != nil {
 		log.Printf("⚠ Failed to query user releases: %v", err)
@@ -1177,10 +979,11 @@ func (s *Store) GetUserReleases(userID string) []Release {
 
 func (s *Store) GetUserReleasesForFeed(userID string, limit int) []Release {
 	rows, err := s.db.Query(`
-		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes
+		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes, r.is_prerelease
 		FROM releases r
 		INNER JOIN user_repos ur ON ur.repo_id = r.repo_id
 		WHERE ur.user_id = ?
+		  AND (r.is_prerelease = 0 OR ur.include_prereleases = 1)
 		ORDER BY r.published_at DESC
 		LIMIT ?`, userID, limit)
 	if err != nil {
@@ -1194,7 +997,7 @@ func (s *Store) GetUserReleasesForFeed(userID string, limit int) []Release {
 // GetAllReleases returns all releases across all repos (used for testing).
 func (s *Store) GetAllReleases() []Release {
 	rows, err := s.db.Query(`
-		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes
+		SELECT r.id, r.repo_id, r.name, r.version, r.platform, r.url, r.published_at, r.description, r.release_notes, r.is_prerelease
 		FROM releases r
 		INNER JOIN repos rp ON rp.id = r.repo_id
 		ORDER BY r.published_at DESC`)
@@ -1211,12 +1014,14 @@ func scanReleases(rows *sql.Rows) []Release {
 	for rows.Next() {
 		var r Release
 		var publishedAt string
+		var prerelease int
 		if err := rows.Scan(&r.ID, &r.ProjectID, &r.Name, &r.Version, &r.Platform, &r.URL,
-			&publishedAt, &r.Description, &r.ReleaseNotes); err != nil {
+			&publishedAt, &r.Description, &r.ReleaseNotes, &prerelease); err != nil {
 			log.Printf("⚠ Failed to scan release: %v", err)
 			continue
 		}
 		r.PublishedAt, _ = time.Parse(time.RFC3339, publishedAt)
+		r.Prerelease = prerelease != 0
 		releases = append(releases, r)
 	}
 	return releases
@@ -1225,10 +1030,10 @@ func scanReleases(rows *sql.Rows) []Release {
 func (s *Store) AddRelease(repoID string, r Release) {
 	_, err := s.db.Exec(`
 		INSERT OR REPLACE INTO releases
-			(id, repo_id, name, version, platform, url, published_at, description, release_notes)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(id, repo_id, name, version, platform, url, published_at, description, release_notes, is_prerelease)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.ID, repoID, r.Name, r.Version, r.Platform, r.URL,
-		r.PublishedAt.Format(time.RFC3339), r.Description, r.ReleaseNotes,
+		r.PublishedAt.Format(time.RFC3339), r.Description, r.ReleaseNotes, boolInt(r.Prerelease),
 	)
 	if err != nil {
 		log.Printf("⚠ Failed to add release %s: %v", r.ID, err)
@@ -1346,10 +1151,10 @@ func (s *Store) RefreshProject(repoID string) {
 	for _, r := range releases {
 		_, err := tx.Exec(`
 			INSERT INTO releases
-				(id, repo_id, name, version, platform, url, published_at, description, release_notes)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				(id, repo_id, name, version, platform, url, published_at, description, release_notes, is_prerelease)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			r.ID, repoID, r.Name, r.Version, r.Platform, r.URL,
-			r.PublishedAt.Format(time.RFC3339), r.Description, r.ReleaseNotes,
+			r.PublishedAt.Format(time.RFC3339), r.Description, r.ReleaseNotes, boolInt(r.Prerelease),
 		)
 		if err != nil {
 			tx.Rollback()
@@ -1370,6 +1175,7 @@ func (s *Store) RefreshProject(repoID string) {
 	}
 	s.MarkRefreshed(repoID)
 	log.Printf("✓ Refreshed %s: %d releases, latest %s", project.Name, len(releases), releases[0].Version)
+	go s.refreshIcon(project)
 
 	// Notify subscribers about genuinely new releases (skip first-ever fetch).
 	if len(existingIDs) > 0 {

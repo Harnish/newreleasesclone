@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release Tracker</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<!-- ===================== AUTH PAGE ===================== -->
+<div id="auth-page">
+<div class="auth-wrap">
+<div class="auth-card">
+    <div class="auth-title">&#x1F680; Release Tracker</div>
+    <div class="auth-subtitle">Track software releases across GitHub, NPM, PyPI and more.</div>
+
+    <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login', this)">Sign In</button>
+        <button class="auth-tab" onclick="switchAuthTab('register', this)">Create Account</button>
+    </div>
+
+    <div id="auth-error" class="auth-error"></div>
+
+    <form id="login-form" class="auth-form active" onsubmit="doLogin(event)">
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" required autocomplete="email">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" name="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="login-btn">Sign In</button>
+    </form>
+
+    <form id="register-form" class="auth-form" onsubmit="doRegister(event)">
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" required autocomplete="email">
+        </div>
+        <div class="form-group">
+            <label>Password <span style="color:#8796ad">(min 8 chars)</span></label>
+            <input type="password" name="password" required minlength="8" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="register-btn">Create Account</button>
+    </form>
+</div>
+</div>
+</div>
+
+<!-- ===================== MAIN APP ===================== -->
+<div id="app-page" style="display:none">
+
+<header class="app-header">
+    <span>&#x1F680;</span>
+    <span class="app-title">Release Tracker</span>
+    <div class="user-info">
+        <span class="username" id="username-display"></span>
+        <button class="btn btn-ghost" onclick="openAccountPanel()" title="Account settings" aria-label="Account settings" style="font-size:1rem;padding:0.3rem 0.5rem">&#x2699;</button>
+        <button class="btn btn-ghost" id="notif-btn" onclick="toggleNotifications()" title="Enable push notifications" aria-label="Push notifications" style="font-size:1rem;padding:0.3rem 0.5rem">&#x1F514;</button>
+        <button class="btn btn-ghost" onclick="doLogout()">Sign out</button>
+    </div>
+</header>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="verify-banner" style="display:none;background:#422006;color:#fbbf24;border-bottom:1px solid #92400e;padding:0.6rem 1.1rem;font-size:0.85rem">
+    Please verify your email address.
+    <button onclick="doResendVerification()" style="background:none;border:none;color:#fbbf24;text-decoration:underline;cursor:pointer;font-size:0.85rem;margin-left:0.5rem">Resend verification email</button>
+    <button onclick="dismissVerifyBanner()" style="background:none;border:none;color:#fbbf24;cursor:pointer;float:right;font-size:1rem">&#x2715;</button>
+</div>
+
+<div class="content">
+    <div class="releases-header">
+        <span class="releases-title">Projects</span>
+        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;justify-content:flex-end">
+            <label style="font-size:0.8rem;color:#94a3b8" for="sort-select">Sort:</label>
+            <select id="sort-select" class="page-size-select" onchange="onSortChange(this.value)">
+                <option value="latest">Latest release</option>
+                <option value="added">Date added</option>
+                <option value="name">Name (A–Z)</option>
+            </select>
+            <label style="font-size:0.8rem;color:#94a3b8" for="page-size-select">Per page:</label>
+            <select id="page-size-select" class="page-size-select" onchange="onPageSizeChange(this.value)">
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+            </select>
+            <button class="btn btn-primary" onclick="toggleAddPanel()">+ Add Project</button>
+        </div>
+    </div>
+    <div class="releases-area">
+        <div id="releases-root"><div class="loading">Loading...</div></div>
+        <div id="add-panel" class="add-panel">
+            <div class="add-panel-inner">
+                <div class="add-panel-title">
+                    Add Project
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeAddPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                </div>
+                <form id="add-form">
+                    <div class="form-group">
+                        <label>Platform</label>
+                        <select name="platform" id="add-platform" required onchange="onPlatformChange()">
+                            <option value="github">GitHub</option>
+                            <option value="gitlab">GitLab</option>
+                            <option value="npm">NPM</option>
+                            <option value="pypi">PyPI</option>
+                            <option value="docker">Docker Hub</option>
+                            <option value="helm-artifacthub">Helm (Artifact Hub)</option>
+                            <option value="helm-repo">Helm (Repo)</option>
+                            <option value="other">Other / Custom URL</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label id="add-repo-label">Repository</label>
+                        <input type="text" name="repo_url" id="add-repo-url" required placeholder="owner/repo" oninput="autoFillName()">
+                        <span id="add-repo-hint" style="display:block;font-size:0.74rem;color:#8796ad;margin-top:0.3rem"></span>
+                    </div>
+                    <div class="form-group">
+                        <label>Display name</label>
+                        <input type="text" name="name" id="add-name" required placeholder="e.g., kubernetes">
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="add-btn" style="width:100%">Add Project</button>
+                </form>
+            </div>
+        </div>
+        <div id="settings-panel" class="settings-panel">
+            <div class="settings-panel-inner">
+                <div class="add-panel-title">
+                    <span id="settings-panel-title">Settings</span>
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeSettingsPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                </div>
+                <div id="settings-panel-body"></div>
+            </div>
+        </div>
+        <div id="account-panel" class="account-panel">
+            <div class="account-panel-inner">
+                <div class="add-panel-title">
+                    Account Settings
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeAccountPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                </div>
+                <div id="account-panel-body"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div><!-- /app-page -->
+
+<div class="build-info">build __BUILD__</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

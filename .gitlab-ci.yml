@@ -19,7 +19,7 @@ build_with_buildah:
     BUILDAH_ISOLATION: "chroot"
   script:
     - echo "Building image with Buildah..."
-    - buildah bud -t ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} -t ${IMAGE_NAME}:latest -f Dockerfile .
+    - buildah bud --build-arg GIT_SHA=${CI_COMMIT_SHORT_SHA} -t ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} -t ${IMAGE_NAME}:latest -f Dockerfile .
     - buildah images | grep ${IMAGE_NAME}
   artifacts:
     reports:
@@ -36,7 +36,7 @@ build_with_podman:
     PODMAN_USERNS: "keep-id"
   script:
     - echo "Building image with Podman..."
-    - podman build -t ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} -t ${IMAGE_NAME}:latest -f Dockerfile .
+    - podman build --build-arg GIT_SHA=${CI_COMMIT_SHORT_SHA} -t ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} -t ${IMAGE_NAME}:latest -f Dockerfile .
     - podman images | grep ${IMAGE_NAME}
   artifacts:
     reports:

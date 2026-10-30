@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -46,7 +48,8 @@ func requestBaseURL(r *http.Request) string {
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {
-	tmpl.Execute(w, nil)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(indexHTML)
 }
 
 // GET /api/me — returns the current user or 401.
@@ -132,6 +135,117 @@ func handleResendVerification(w http.ResponseWriter, r *http.Request, userID str
 	w.Write([]byte(`{"ok":true}`))
 }
 
+var (
+	attemptMu sync.Mutex
+	attempts  = map[string][]time.Time{}
+	lastSweep time.Time
+)
+
+const (
+	maxAttemptWindow = time.Hour // longest window passed to allow()
+	maxAttemptKeys   = 10000
+)
+
+// allow records an attempt for key and reports whether it is within max per
+// window. Check and record share one lock, so concurrent requests can't race
+// past the limit.
+// ponytail: in-memory, per-process, keyed on RemoteAddr (a reverse proxy
+// collapses all clients to one IP); move to the DB / trusted XFF if that bites.
+func allow(key string, max int, window time.Duration) bool {
+	attemptMu.Lock()
+	defer attemptMu.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-window)
+	// Sweep at most once a minute, against the longest window in use, so one
+	// caller's short window can't evict another policy's live entries.
+	if now.Sub(lastSweep) > time.Minute {
+		lastSweep = now
+		for k, ts := range attempts {
+			if len(ts) == 0 || ts[len(ts)-1].Before(now.Add(-maxAttemptWindow)) {
+				delete(attempts, k)
+			}
+		}
+	}
+	// Hard cap: evict the least recently used key rather than locking out new
+	// callers. ponytail: O(n) scan, only runs when the map is full.
+	if _, known := attempts[key]; !known && len(attempts) >= maxAttemptKeys {
+		var oldest string
+		var oldestT time.Time
+		for k, ts := range attempts {
+			if last := ts[len(ts)-1]; oldest == "" || last.Before(oldestT) {
+				oldest, oldestT = k, last
+			}
+		}
+		delete(attempts, oldest)
+	}
+	recent := attempts[key][:0]
+	for _, t := range attempts[key] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= max {
+		attempts[key] = recent
+		return false
+	}
+	attempts[key] = append(recent, now)
+	return true
+}
+
+func forgetAttempts(key string) {
+	attemptMu.Lock()
+	delete(attempts, key)
+	attemptMu.Unlock()
+}
+
+// trustedProxies: CIDRs (TRUSTED_PROXY_CIDRS, comma-separated) of the reverse
+// proxy/ingress. X-Forwarded-For is honoured only when the connection itself
+// comes from one of them; otherwise clients could spoof it.
+var trustedProxies = parseCIDRs(os.Getenv("TRUSTED_PROXY_CIDRS"))
+
+func parseCIDRs(raw string) []*net.IPNet {
+	var nets []*net.IPNet
+	for _, c := range strings.Split(raw, ",") {
+		if c = strings.TrimSpace(c); c == "" {
+			continue
+		}
+		if _, n, err := net.ParseCIDR(c); err == nil {
+			nets = append(nets, n)
+		} else {
+			log.Printf("⚠ ignoring bad TRUSTED_PROXY_CIDRS entry %q: %v", c, err)
+		}
+	}
+	return nets
+}
+
+func fromTrustedProxy(remote string) bool {
+	ip := net.ParseIP(remote)
+	for _, n := range trustedProxies {
+		if ip != nil && n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func clientIP(r *http.Request) string {
+	conn, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		conn = r.RemoteAddr
+	}
+	if fromTrustedProxy(conn) {
+		// Rightmost entry is the one our proxy appended; earlier ones are
+		// client-controlled. ponytail: assumes exactly one proxy hop.
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if ip := strings.TrimSpace(parts[len(parts)-1]); net.ParseIP(ip) != nil {
+				return ip
+			}
+		}
+	}
+	return conn
+}
+
 // POST /api/register
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -147,6 +261,11 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	regKey := "reg|" + clientIP(r)
+	if !allow(regKey, 10, time.Hour) {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
 	if len(req.Password) < 8 {
 		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
 		return
@@ -174,7 +293,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sessionID := store.CreateSession(user.ID)
-	setSessionCookie(w, sessionID)
+	setSessionCookie(w, r, sessionID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(user)
@@ -195,13 +314,28 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if len(req.Email) > 254 {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
+	// Per-IP cap bounds how many per-email keys one client can create.
+	if !allow("loginip|"+clientIP(r), 50, 15*time.Minute) {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+	loginKey := "login|" + clientIP(r) + "|" + req.Email
+	if !allow(loginKey, 10, 15*time.Minute) {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
 	user, err := store.AuthenticateUser(req.Email, req.Password)
 	if err != nil {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
+	forgetAttempts(loginKey)
 	sessionID := store.CreateSession(user.ID)
-	setSessionCookie(w, sessionID)
+	setSessionCookie(w, r, sessionID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }
@@ -219,12 +353,13 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func setSessionCookie(w http.ResponseWriter, sessionID string) {
+func setSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   30 * 24 * 3600,
 	})
@@ -247,6 +382,18 @@ func handleProjects(w http.ResponseWriter, r *http.Request, userID string) {
 		if p.Platform == "" || p.RepoURL == "" || p.Name == "" {
 			http.Error(w, "name, platform, and repo_url are required", http.StatusBadRequest)
 			return
+		}
+		if p.Platform == "helm-repo" {
+			// The one platform whose host is user-supplied. Fast-fail here; the
+			// dial-time guard in helmRepoClient is the actual boundary.
+			if !strings.HasPrefix(p.RepoURL, "https://") {
+				http.Error(w, "repo_url must start with https://", http.StatusBadRequest)
+				return
+			}
+			if err := validateOutboundURL(p.RepoURL, "repo_url"); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 		}
 		repoID, err := store.AddRepo(userID, p)
 		if err != nil {
@@ -544,6 +691,8 @@ func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string
 		RepoID         string `json:"repo_id"`
 		PushEnabled    bool   `json:"push_enabled"`
 		EmailImmediate bool   `json:"email_immediate"`
+		// Pointer: older clients omit it, and that must not reset the setting.
+		IncludePrereleases *bool `json:"include_prereleases"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -564,6 +713,12 @@ func handleProjectSettings(w http.ResponseWriter, r *http.Request, userID string
 	}
 	if smtpEnabled {
 		if _, err := store.SetProjectEmailImmediate(userID, req.RepoID, req.EmailImmediate); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if req.IncludePrereleases != nil {
+		if _, err := store.SetProjectIncludePrereleases(userID, req.RepoID, *req.IncludePrereleases); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

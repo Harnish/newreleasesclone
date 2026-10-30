@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -17,7 +18,7 @@ func fetchGitHubReleases(project Project) []Release {
 	repoPath = strings.TrimSuffix(repoPath, ".git")
 
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=30", repoPath)
-	resp, err := http.Get(url)
+	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ GitHub API error for %s: %v", project.Name, err)
 		return nil
@@ -47,7 +48,7 @@ func fetchGitHubReleases(project Project) []Release {
 
 	var releases []Release
 	for _, gh := range ghReleases {
-		if gh.Draft || gh.Prerelease {
+		if gh.Draft {
 			continue
 		}
 		pubTime, _ := time.Parse(time.RFC3339, gh.PublishedAt)
@@ -60,31 +61,18 @@ func fetchGitHubReleases(project Project) []Release {
 			PublishedAt:  pubTime,
 			Description:  truncate(gh.Body, 200),
 			ReleaseNotes: gh.Body,
+			Prerelease:   gh.Prerelease,
 		})
-	}
-
-	// If no stable releases, fall back to including prereleases
-	if len(releases) == 0 {
-		for _, gh := range ghReleases {
-			if gh.Draft {
-				continue
-			}
-			pubTime, _ := time.Parse(time.RFC3339, gh.PublishedAt)
-			releases = append(releases, Release{
-				ID:           fmt.Sprintf("gh_%d", gh.ID),
-				Name:         project.Name,
-				Version:      gh.TagName,
-				Platform:     "github",
-				URL:          gh.HtmlUrl,
-				PublishedAt:  pubTime,
-				Description:  truncate(gh.Body, 200),
-				ReleaseNotes: gh.Body,
-			})
-		}
 	}
 
 	return releases
 }
+
+// Package-registry base URLs; vars so tests can point them at httptest servers.
+var (
+	npmRegistryURL = "https://registry.npmjs.org"
+	pypiBaseURL    = "https://pypi.org"
+)
 
 func fetchNPMVersions(project Project) []Release {
 	pkgName := project.Name
@@ -94,8 +82,8 @@ func fetchNPMVersions(project Project) []Release {
 		pkgName = "react" // legacy entry
 	}
 
-	url := fmt.Sprintf("https://registry.npmjs.org/%s", pkgName)
-	resp, err := http.Get(url)
+	url := fmt.Sprintf("%s/%s", npmRegistryURL, pkgName)
+	resp, err := fetch(url, maxBodyLarge)
 	if err != nil {
 		log.Printf("⚠ NPM API error for %s: %v", project.Name, err)
 		return nil
@@ -122,23 +110,15 @@ func fetchNPMVersions(project Project) []Release {
 		return nil
 	}
 
-	var versions []string
-	for v := range npmData.Versions {
-		versions = append(versions, v)
-	}
-
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i] > versions[j]
-	})
-
 	var releases []Release
-	for i, v := range versions {
-		if i >= 10 {
-			break
+	for v := range npmData.Versions {
+		t, ok := npmData.Time[v]
+		if !ok {
+			continue // no publish time: can't place it, and a fake "now" would outrank real releases
 		}
-		pubTime := time.Now()
-		if t, ok := npmData.Time[v]; ok {
-			pubTime, _ = time.Parse(time.RFC3339, t)
+		pubTime, err := time.Parse(time.RFC3339, t)
+		if err != nil {
+			continue
 		}
 		releases = append(releases, Release{
 			ID:          fmt.Sprintf("npm_%s", v),
@@ -148,17 +128,18 @@ func fetchNPMVersions(project Project) []Release {
 			URL:         fmt.Sprintf("https://www.npmjs.com/package/%s/v/%s", pkgName, v),
 			PublishedAt: pubTime,
 			Description: "NPM Package Version",
+			Prerelease:  isPrerelease(v),
 		})
 	}
 
-	return releases
+	return newestReleases(releases)
 }
 
 func fetchPyPIReleases(project Project) []Release {
 	pkgName := project.Name
 
-	url := fmt.Sprintf("https://pypi.org/pypi/%s/json", pkgName)
-	resp, err := http.Get(url)
+	url := fmt.Sprintf("%s/pypi/%s/json", pypiBaseURL, pkgName)
+	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ PyPI API error for %s: %v", project.Name, err)
 		return nil
@@ -181,23 +162,19 @@ func fetchPyPIReleases(project Project) []Release {
 		return nil
 	}
 
-	var versions []string
-	for v := range pypiData.Releases {
-		versions = append(versions, v)
-	}
-
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i] > versions[j]
-	})
-
 	var releases []Release
-	for i, v := range versions {
-		if i >= 10 {
-			break
+	for v, files := range pypiData.Releases {
+		// First upload is when the version was published. Versions with no
+		// files (all deleted) aren't installable, so they aren't releases.
+		var pubTime time.Time
+		for _, f := range files {
+			t, err := time.Parse(time.RFC3339, f.UploadTime)
+			if err == nil && (pubTime.IsZero() || t.Before(pubTime)) {
+				pubTime = t
+			}
 		}
-		pubTime := time.Now()
-		if uploads, ok := pypiData.Releases[v]; ok && len(uploads) > 0 {
-			pubTime, _ = time.Parse(time.RFC3339, uploads[0].UploadTime)
+		if pubTime.IsZero() {
+			continue
 		}
 		releases = append(releases, Release{
 			ID:          fmt.Sprintf("pypi_%s", v),
@@ -207,10 +184,11 @@ func fetchPyPIReleases(project Project) []Release {
 			URL:         fmt.Sprintf("https://pypi.org/project/%s/%s/", pkgName, v),
 			PublishedAt: pubTime,
 			Description: "PyPI Package Version",
+			Prerelease:  isPrerelease(v),
 		})
 	}
 
-	return releases
+	return newestReleases(releases)
 }
 
 func fetchDockerTags(project Project) []Release {
@@ -227,7 +205,7 @@ func fetchDockerTags(project Project) []Release {
 	}
 
 	url := fmt.Sprintf("https://hub.docker.com/v2/repositories/%s/tags?page_size=10", repo)
-	resp, err := http.Get(url)
+	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ Docker Hub API error for %s: %v", project.Name, err)
 		return nil
@@ -262,6 +240,7 @@ func fetchDockerTags(project Project) []Release {
 			URL:         fmt.Sprintf("https://hub.docker.com/r/%s/tags", repo),
 			PublishedAt: pubTime,
 			Description: "Docker Image Tag",
+			Prerelease:  isPrerelease(tag.Name),
 		})
 	}
 
@@ -274,7 +253,7 @@ func fetchGitLabReleases(project Project) []Release {
 	projectID := strings.ReplaceAll(repoPath, "/", "%2F")
 
 	url := fmt.Sprintf("https://gitlab.com/api/v4/projects/%s/releases?per_page=10", projectID)
-	resp, err := http.Get(url)
+	resp, err := fetch(url, maxBody)
 	if err != nil {
 		log.Printf("⚠ GitLab API error for %s: %v", project.Name, err)
 		return nil
@@ -292,6 +271,7 @@ func fetchGitLabReleases(project Project) []Release {
 		Description string `json:"description"`
 		CreatedAt   string `json:"created_at"`
 		WebUrl      string `json:"web_url"`
+		Upcoming    bool   `json:"upcoming_release"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&glReleases); err != nil {
@@ -311,10 +291,118 @@ func fetchGitLabReleases(project Project) []Release {
 			PublishedAt:  pubTime,
 			Description:  truncate(gl.Description, 200),
 			ReleaseNotes: gl.Description,
+			Prerelease:   gl.Upcoming || isPrerelease(gl.TagName),
 		})
 	}
 
 	return releases
+}
+
+var (
+	// prereleaseWord: alpha/beta/rc/... delimited by non-letters, e.g. "1.0.0-rc.1", "2.0-beta", "nightly".
+	prereleaseWord = regexp.MustCompile(`(?i)(^|[^a-z])(alpha|beta|rc|pre|preview|dev|canary|experimental|nightly|snapshot|next|unstable)([^a-z]|$)`)
+	// prereleaseShort: PEP 440 style "1.0a1", "1.0b2", "1.0rc1".
+	prereleaseShort = regexp.MustCompile(`(?i)\d(a|b|rc)\d+($|[.\-+_])`)
+)
+
+// isPrerelease guesses from a version/tag string for platforms whose API has
+// no prerelease flag (npm, PyPI, Docker, Helm repos). Docker tags like
+// "1.2.3-alpine" or "latest" are deliberately not treated as prereleases.
+func isPrerelease(version string) bool {
+	return prereleaseWord.MatchString(version) || prereleaseShort.MatchString(version)
+}
+
+const (
+	maxBody      = 16 << 20 // GitHub, PyPI, Docker, GitLab, Artifact Hub (largest seen: ~3 MB)
+	maxBodyLarge = 64 << 20 // npm packuments and Helm index.yaml (largest seen: ~16 MB)
+)
+
+// fetch GETs url and caps the response body at limit bytes, so a hostile or
+// broken upstream can't exhaust memory. Reading past the cap fails with
+// *http.MaxBytesError, which the callers' decoders surface as a parse error.
+func fetch(url string, limit int64) (*http.Response, error) {
+	return fetchVia(http.DefaultClient, url, limit)
+}
+
+// guardedClient is for fetches whose host is user-supplied: Helm repo indexes,
+// and icon downloads (their URLs can come from a Helm repo). Its transport
+// re-checks the resolved IP on every connection (including redirect hops) and
+// honours GITLAB_ALLOWED_HOSTS for internal repos. Redirects must stay on https.
+var guardedClient = &http.Client{
+	Timeout:       30 * time.Second,
+	Transport:     gitLabHTTPTransport,
+	CheckRedirect: httpsOnlyRedirects,
+}
+
+// strictClient is guardedClient without the GITLAB_ALLOWED_HOSTS exemption: it
+// always refuses private addresses. Use it for URLs that come from third-party
+// content, which must never be able to aim the server at an allowlisted host.
+var strictClient = &http.Client{
+	Timeout:       30 * time.Second,
+	Transport:     &http.Transport{DialContext: gitLabGuardedDialer.DialContext},
+	CheckRedirect: httpsOnlyRedirects,
+}
+
+func httpsOnlyRedirects(req *http.Request, via []*http.Request) error {
+	if req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing redirect to non-https URL %s", req.URL)
+	}
+	if len(via) >= 5 {
+		return fmt.Errorf("stopped after 5 redirects")
+	}
+	return nil
+}
+
+func fetchVia(client *http.Client, url string, limit int64) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	// Some hosts (Wikimedia, for one) reject Go's default User-Agent.
+	req.Header.Set("User-Agent", "newreleases/"+buildVersion()+" (+https://github.com/Harnish/newreleases)")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.ContentLength > limit {
+		resp.Body.Close()
+		return nil, fmt.Errorf("response too large: %d bytes (limit %d)", resp.ContentLength, limit)
+	}
+	resp.Body = http.MaxBytesReader(nil, resp.Body, limit) // nil writer is fine; Close closes the original body
+	return resp, nil
+}
+
+const (
+	keepStable     = 10 // newest stable releases kept per project
+	keepPrerelease = 5  // newest prereleases kept, so a run of rc's can't crowd stable out
+)
+
+// newestReleases orders rels newest-published first (ties: higher version
+// string first, so output is deterministic despite map iteration upstream) and
+// keeps the newest keepStable stable and keepPrerelease prerelease entries.
+// Ordering by publish time sidesteps comparing semver/PEP 440 strings, where
+// plain string order puts "9.0.0" above "10.0.0".
+func newestReleases(rels []Release) []Release {
+	sort.Slice(rels, func(i, j int) bool {
+		if !rels[i].PublishedAt.Equal(rels[j].PublishedAt) {
+			return rels[i].PublishedAt.After(rels[j].PublishedAt)
+		}
+		return rels[i].Version > rels[j].Version
+	})
+	var out []Release
+	stable, pre := 0, 0
+	for _, r := range rels {
+		if r.Prerelease {
+			if pre < keepPrerelease {
+				pre++
+				out = append(out, r)
+			}
+		} else if stable < keepStable {
+			stable++
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func truncate(s string, maxLen int) string {
@@ -337,7 +425,7 @@ func fetchHelmArtifactHub(project Project) []Release {
 	repoName, chartName := parts[0], parts[1]
 
 	listURL := fmt.Sprintf("%s/api/v1/packages/helm/%s/%s", artifacthubBaseURL, repoName, chartName)
-	resp, err := http.Get(listURL)
+	resp, err := fetch(listURL, maxBody)
 	if err != nil {
 		log.Printf("⚠ Artifact Hub API error for %s: %v", project.Name, err)
 		return nil
@@ -362,29 +450,30 @@ func fetchHelmArtifactHub(project Project) []Release {
 	}
 
 	type versionEntry struct {
-		version string
-		ts      int64
+		version    string
+		ts         int64
+		prerelease bool
 	}
 
+	// Same window as newestReleases: keepStable stable plus keepPrerelease prereleases.
 	var stable []versionEntry
+	nStable, nPre := 0, 0
 	for _, v := range pkgData.AvailableVersions {
-		if !v.Prerelease {
-			stable = append(stable, versionEntry{v.Version, v.TS})
+		if v.Prerelease {
+			if nPre < keepPrerelease {
+				nPre++
+				stable = append(stable, versionEntry{v.Version, v.TS, true})
+			}
+		} else if nStable < keepStable {
+			nStable++
+			stable = append(stable, versionEntry{v.Version, v.TS, false})
 		}
-	}
-	if len(stable) == 0 {
-		for _, v := range pkgData.AvailableVersions {
-			stable = append(stable, versionEntry{v.Version, v.TS})
-		}
-	}
-	if len(stable) > 10 {
-		stable = stable[:10]
 	}
 
 	var releases []Release
 	for _, v := range stable {
 		detailURL := fmt.Sprintf("%s/api/v1/packages/helm/%s/%s/%s", artifacthubBaseURL, repoName, chartName, v.version)
-		detailResp, err := http.Get(detailURL)
+		detailResp, err := fetch(detailURL, maxBody)
 		if err != nil {
 			log.Printf("⚠ Artifact Hub version detail error for %s@%s: %v", project.Name, v.version, err)
 			continue
@@ -416,6 +505,7 @@ func fetchHelmArtifactHub(project Project) []Release {
 			URL:         project.RepoURL,
 			PublishedAt: time.Unix(v.ts, 0),
 			Description: truncate(pkgData.Description, 200),
+			Prerelease:  v.prerelease,
 		})
 	}
 
@@ -431,15 +521,18 @@ type helmChartVersion struct {
 	AppVersion string   `yaml:"appVersion"`
 	Created    string   `yaml:"created"`
 	URLs       []string `yaml:"urls"`
+	Icon       string   `yaml:"icon"`
 }
 
-func fetchHelmRepo(project Project) []Release {
+// helmRepoEntries downloads a Helm repo's index.yaml and returns the versions
+// of project.Name's chart, or nil (after logging why).
+func helmRepoEntries(project Project) []helmChartVersion {
 	if !strings.HasPrefix(project.RepoURL, "https://") {
 		log.Printf("⚠ Helm repo URL must use HTTPS: %s", project.RepoURL)
 		return nil
 	}
 	indexURL := strings.TrimSuffix(project.RepoURL, "/") + "/index.yaml"
-	resp, err := http.Get(indexURL)
+	resp, err := fetchVia(guardedClient, indexURL, maxBodyLarge)
 	if err != nil {
 		log.Printf("⚠ Helm repo index error for %s: %v", project.Name, err)
 		return nil
@@ -461,29 +554,20 @@ func fetchHelmRepo(project Project) []Release {
 		log.Printf("⚠ Chart %q not found in Helm repo %s", project.Name, project.RepoURL)
 		return nil
 	}
+	return entries
+}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Created > entries[j].Created
-	})
-
-	var stable []helmChartVersion
-	for _, e := range entries {
-		if !strings.Contains(e.Version, "-") {
-			stable = append(stable, e)
-		}
-	}
-	if len(stable) == 0 {
-		stable = entries
-	}
-	if len(stable) > 10 {
-		stable = stable[:10]
+func fetchHelmRepo(project Project) []Release {
+	entries := helmRepoEntries(project)
+	if entries == nil {
+		return nil
 	}
 
 	var releases []Release
-	for _, e := range stable {
-		pubTime := time.Now()
-		if e.Created != "" {
-			pubTime, _ = time.Parse(time.RFC3339, e.Created)
+	for _, e := range entries {
+		pubTime, err := time.Parse(time.RFC3339, e.Created)
+		if err != nil {
+			continue // undated: can't place it, and a fake "now" would outrank real releases
 		}
 		url := project.RepoURL
 		if len(e.URLs) > 0 {
@@ -501,8 +585,10 @@ func fetchHelmRepo(project Project) []Release {
 			URL:         url,
 			PublishedAt: pubTime,
 			Description: "Helm Chart",
+			// Chart versions are SemVer, where any "-suffix" marks a prerelease.
+			Prerelease: strings.Contains(e.Version, "-") || isPrerelease(e.Version),
 		})
 	}
 
-	return releases
+	return newestReleases(releases)
 }

@@ -19,8 +19,9 @@ COPY . .
 # Run tests
 RUN go test -v ./...
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o newreleases .
+# Build the application (GIT_SHA is shown in the UI footer; see main.version)
+ARG GIT_SHA=dev
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags "-X main.version=${GIT_SHA}" -o newreleases .
 
 # Final stage
 FROM alpine:latest

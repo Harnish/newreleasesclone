@@ -345,28 +345,32 @@ var gitLabHTTPTransport = &http.Transport{
 // the server subsequently makes authenticated-looking requests to it
 // (project lookup/creation) and mirror git-pushes to whatever project URL
 // it returns — SSRF if unvalidated.
-func validateGitLabURL(rawURL string) error {
+func validateGitLabURL(rawURL string) error { return validateOutboundURL(rawURL, "gitlab_url") }
+
+// validateOutboundURL is the shared fast-fail check for any user-supplied URL
+// the server will fetch; field names the input in error messages.
+func validateOutboundURL(rawURL, field string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return fmt.Errorf("invalid gitlab_url: %w", err)
+		return fmt.Errorf("invalid %s: %w", field, err)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("gitlab_url must start with http:// or https://")
+		return fmt.Errorf("%s must start with http:// or https://", field)
 	}
 	host := u.Hostname()
 	if host == "" {
-		return fmt.Errorf("gitlab_url must include a host")
+		return fmt.Errorf("%s must include a host", field)
 	}
 	if isAllowedHost(host) {
 		return nil
 	}
 	ips, err := net.LookupIP(host)
 	if err != nil {
-		return fmt.Errorf("could not resolve gitlab_url host %q: %w", host, err)
+		return fmt.Errorf("could not resolve %s host %q: %w", field, host, err)
 	}
 	for _, ip := range ips {
 		if isDisallowedIP(ip) {
-			return fmt.Errorf("gitlab_url resolves to a disallowed address")
+			return fmt.Errorf("%s resolves to a disallowed address", field)
 		}
 	}
 	return nil

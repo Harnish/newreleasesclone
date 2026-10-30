@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"runtime/debug"
+	"time"
 )
 
 var (
@@ -11,8 +13,30 @@ var (
 	smtpEnabled bool
 )
 
+// version is the git commit this binary was built from. The Dockerfile sets it
+// with -ldflags "-X main.version=<sha>"; local `go build` falls back to the
+// VCS revision Go embeds, else "dev".
+var version = "dev"
+
+func buildVersion() string {
+	if version != "dev" {
+		if len(version) > 12 { // full SHA from CI
+			return version[:7]
+		}
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range bi.Settings {
+			if s.Key == "vcs.revision" && len(s.Value) >= 7 {
+				return s.Value[:7]
+			}
+		}
+	}
+	return version
+}
+
 func main() {
-	log.Println("Starting Release Tracker...")
+	log.Printf("Starting Release Tracker (build %s)...", buildVersion())
 
 	var err error
 	store, err = NewStore("data/newreleases.db")
@@ -31,10 +55,12 @@ func main() {
 	go runGitLabSyncScheduler()
 
 	http.HandleFunc("/", handleHome)
+	http.Handle("/static/", staticHandler())
 	http.HandleFunc("/sw.js", handleServiceWorker)
 	http.HandleFunc("/verify-email", handleVerifyEmail)
 	http.HandleFunc("/feed/", handleFeed)
 	http.HandleFunc("/api/me", requireAuth(handleMe))
+	http.HandleFunc("/api/icon", requireAuth(handleIcon))
 	http.HandleFunc("/api/register", handleRegister)
 	http.HandleFunc("/api/login", handleLogin)
 	http.HandleFunc("/api/logout", handleLogout)
@@ -54,5 +80,8 @@ func main() {
 	http.HandleFunc("/api/project-gitlab-sync/sync-now", requireAuth(handleProjectGitLabSyncNow))
 
 	fmt.Println("Release Tracker running on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// Fetchers use http.Get (DefaultClient), which has no timeout by default.
+	http.DefaultClient.Timeout = 30 * time.Second
+	srv := &http.Server{Addr: ":8080", ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second}
+	log.Fatal(srv.ListenAndServe())
 }
