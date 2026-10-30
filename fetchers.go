@@ -74,13 +74,18 @@ var (
 	pypiBaseURL    = "https://pypi.org"
 )
 
-func fetchNPMVersions(project Project) []Release {
-	pkgName := project.Name
+func npmPackageName(project Project) string {
 	if strings.HasPrefix(project.RepoURL, "https://www.npmjs.com/package/") {
-		pkgName = strings.TrimPrefix(project.RepoURL, "https://www.npmjs.com/package/")
-	} else if strings.Contains(project.RepoURL, "github.com/facebook/react") {
-		pkgName = "react" // legacy entry
+		return strings.TrimPrefix(project.RepoURL, "https://www.npmjs.com/package/")
 	}
+	if strings.Contains(project.RepoURL, "github.com/facebook/react") {
+		return "react" // legacy entry
+	}
+	return project.Name
+}
+
+func fetchNPMVersions(project Project) []Release {
+	pkgName := npmPackageName(project)
 
 	url := fmt.Sprintf("%s/%s", npmRegistryURL, pkgName)
 	resp, err := fetch(url, maxBodyLarge)
@@ -191,18 +196,18 @@ func fetchPyPIReleases(project Project) []Release {
 	return newestReleases(releases)
 }
 
-func fetchDockerTags(project Project) []Release {
-	var repo string
+func dockerRepo(project Project) string {
 	if strings.HasPrefix(project.RepoURL, "https://hub.docker.com/r/") {
-		repo = strings.TrimSuffix(strings.TrimPrefix(project.RepoURL, "https://hub.docker.com/r/"), "/")
-	} else {
-		repoParts := strings.Split(project.Name, "/")
-		if len(repoParts) == 1 {
-			repo = "library/" + project.Name
-		} else {
-			repo = project.Name
-		}
+		return strings.TrimSuffix(strings.TrimPrefix(project.RepoURL, "https://hub.docker.com/r/"), "/")
 	}
+	if !strings.Contains(project.Name, "/") {
+		return "library/" + project.Name
+	}
+	return project.Name
+}
+
+func fetchDockerTags(project Project) []Release {
+	repo := dockerRepo(project)
 
 	url := fmt.Sprintf("https://hub.docker.com/v2/repositories/%s/tags?page_size=10", repo)
 	resp, err := fetch(url, maxBody)
@@ -517,11 +522,12 @@ type helmIndex struct {
 }
 
 type helmChartVersion struct {
-	Version    string   `yaml:"version"`
-	AppVersion string   `yaml:"appVersion"`
-	Created    string   `yaml:"created"`
-	URLs       []string `yaml:"urls"`
-	Icon       string   `yaml:"icon"`
+	Version     string   `yaml:"version"`
+	AppVersion  string   `yaml:"appVersion"`
+	Created     string   `yaml:"created"`
+	URLs        []string `yaml:"urls"`
+	Icon        string   `yaml:"icon"`
+	Description string   `yaml:"description"`
 }
 
 // helmRepoEntries downloads a Helm repo's index.yaml and returns the versions

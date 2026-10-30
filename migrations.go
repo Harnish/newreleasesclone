@@ -166,6 +166,11 @@ var migrations = []migration{
 			fetched_at   INTEGER NOT NULL DEFAULT 0
 		)`,
 	}},
+	{version: 16, stmts: []string{
+		// Upstream one-line project description; description_checked_at (unix) throttles re-lookups.
+		`ALTER TABLE repos ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE repos ADD COLUMN description_checked_at INTEGER NOT NULL DEFAULT 0`,
+	}},
 }
 
 func migrate(db *sql.DB) error { return runMigrations(db, migrations) }
