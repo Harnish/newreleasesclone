@@ -904,6 +904,7 @@ func (s *Store) RemoveUserRepo(userID, repoID string) bool {
 }
 
 func (s *Store) GetUserRepos(userID string) []Project {
+	tags := s.GetUserTags(userID) // before the query below: the DB has one connection, so it can't run while rows is open
 	rows, err := s.db.Query(`
 		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled,
 		       ur.email_immediate, ur.include_prereleases,
@@ -942,6 +943,9 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		p.EmailImmediate = emailImmediate != 0
 		p.IncludePrereleases = includePre != 0
 		p.GitLabSyncEnabled = gitlabSyncEnabled != 0
+		if p.Tags = tags[p.ID]; p.Tags == nil {
+			p.Tags = []string{}
+		}
 		projects = append(projects, p)
 	}
 	return projects
