@@ -111,6 +111,8 @@ var allReleases = [];
 var currentPage = 1;
 var pageSize = parseInt(localStorage.getItem('page_size'), 10) || 10;
 var SORT_MODES = ['latest', 'added', 'name'];
+var UNTAGGED = '__untagged__';
+var tagFilter = (function() { try { return localStorage.getItem('tag_filter') || ''; } catch (e) { return ''; } })();
 var sortMode = (function() {
     try { var m = localStorage.getItem('sort_mode'); if (SORT_MODES.indexOf(m) !== -1) return m; } catch (e) {}
     return 'latest';
@@ -251,11 +253,13 @@ function loadAccountPanel() {
 
     Promise.all([
         fetch('/api/account-settings').then(apiJSON),
-        fetch('/api/gitlab-settings').then(apiJSON)
+        fetch('/api/gitlab-settings').then(apiJSON),
+        fetch('/api/tags').then(apiJSON)
     ])
         .then(function(res) {
             var settings = res[0];
             var gitlabSettings = res[1];
+            var tagList = res[2] || [];
             var smtpOk = !!(currentUser && currentUser.smtp_enabled);
             var verifiedOk = !!(currentUser && currentUser.email_verified);
             var canUse = smtpOk && verifiedOk;
@@ -401,6 +405,36 @@ function loadAccountPanel() {
             glSection.appendChild(awesomeNameInput);
 
             body.appendChild(glSection);
+
+            var tagSection = document.createElement('div');
+            tagSection.style.cssText = 'margin-top:1rem;padding-top:0.75rem;border-top:1px solid #334155';
+            var tagTitle = document.createElement('div');
+            tagTitle.className = 'settings-section-title';
+            tagTitle.textContent = 'Tags';
+            tagSection.appendChild(tagTitle);
+            var tagHint = document.createElement('div');
+            tagHint.className = 'settings-hint';
+            tagHint.style.marginBottom = '0.6rem';
+            tagHint.textContent = tagList.length
+                ? 'Shown under each tag\u2019s heading on your Awesome page.'
+                : 'Add tags to a project from its settings (\u2699), then describe them here.';
+            tagSection.appendChild(tagHint);
+            tagList.forEach(function(t) {
+                var lab = document.createElement('label');
+                lab.style.cssText = 'display:block;font-size:0.8rem;color:#cbd5e1;margin-top:0.5rem';
+                lab.textContent = t.tag + ' (' + t.count + ')';
+                var inp = document.createElement('input');
+                inp.type = 'text';
+                inp.className = 'webhook-input';
+                inp.maxLength = 200;
+                inp.placeholder = 'Describe this tag\u2026';
+                inp.value = t.description || '';
+                inp.style.cssText = 'width:100%;margin-top:0.2rem;box-sizing:border-box';
+                inp.onchange = function() { saveTagDescription(t.tag, inp.value); };
+                lab.appendChild(inp);
+                tagSection.appendChild(lab);
+            });
+            body.appendChild(tagSection);
         })
         .catch(function() {
             body.textContent = '';
@@ -442,6 +476,17 @@ function saveGitLabSettings() {
         document.getElementById('gitlab-token-input').value = '';
         document.getElementById('gitlab-token-input').placeholder = 'Token saved (enter to replace)';
     }).catch(function(err) { toast('Error: ' + err, 'err'); });
+}
+
+function saveTagDescription(tag, description) {
+    fetch('/api/tags', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({tag: tag, description: description})
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
+        toast('Tag description saved', 'ok');
+    }).catch(function(err) { toast('Error: ' + err.message, 'err'); });
 }
 
 function onAwesomeToggle(checkbox) {
@@ -571,6 +616,7 @@ function buildReleasesHTML(releases, projects) {
                     '<button class="proj-name proj-name-btn" title="Show versions" data-id="' + esc(pid) + '" onclick="openProjectDetail(this.dataset.id)">' + esc(pname) + '</button>' +
                     (platform ? '<span class="badge ' + esc(platform) + '">' + esc(platform) + '</span>' : '') +
                     backupLink +
+                    ((proj && proj.tags) || []).map(function(t) { return '<span class="tag-label">' + esc(t) + '</span>'; }).join('') +
                 '</div>' +
                 '<div class="proj-right">' +
                     '<button class="btn btn-ghost proj-ctrl" title="Refresh" aria-label="Refresh ' + esc(pname) + '" ' +
@@ -598,7 +644,7 @@ function buildReleasesHTML(releases, projects) {
 }
 
 function buildPaginationHTML() {
-    var total = allProjects.length;
+    var total = visibleProjects().length;
     var totalPages = Math.ceil(total / pageSize);
     if (totalPages <= 1) return '';
     return '<div class="pagination">' +
@@ -635,9 +681,116 @@ function onSortChange(val) {
     renderPage();
 }
 
+// ---- Tags ----
+function projectHasTag(p, tag) {
+    return (p.tags || []).some(function(t) { return t.toLowerCase() === tag.toLowerCase(); });
+}
+
+function visibleProjects() {
+    if (!tagFilter) return allProjects;
+    return allProjects.filter(function(p) {
+        return tagFilter === UNTAGGED ? !(p.tags && p.tags.length) : projectHasTag(p, tagFilter);
+    });
+}
+
+// Every tag in use, alphabetical, first spelling wins.
+function allTags() {
+    var seen = {}, out = [];
+    allProjects.forEach(function(p) {
+        (p.tags || []).forEach(function(t) {
+            if (!seen[t.toLowerCase()]) { seen[t.toLowerCase()] = true; out.push(t); }
+        });
+    });
+    return out.sort(function(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
+}
+
+function renderTagFilter() {
+    var box = document.getElementById('tag-filter');
+    var tags = allTags();
+    if (!tags.length) { tagFilter = ''; box.style.display = 'none'; return; }
+    var untagged = allProjects.filter(function(p) { return !(p.tags && p.tags.length); }).length;
+    if (tagFilter && tagFilter !== UNTAGGED && !tags.some(function(t) { return t.toLowerCase() === tagFilter.toLowerCase(); })) tagFilter = '';
+    if (tagFilter === UNTAGGED && !untagged) tagFilter = '';
+    var chip = function(label, value, count, dashed) {
+        var on = tagFilter.toLowerCase() === value.toLowerCase();
+        return '<button class="tag-chip' + (on ? ' active' : '') + (dashed ? ' dashed' : '') + '" aria-pressed="' + on + '" ' +
+            'data-tag="' + esc(value) + '" onclick="setTagFilter(this.dataset.tag)">' + esc(label) + ' (' + count + ')</button>';
+    };
+    box.innerHTML = chip('All', '', allProjects.length) +
+        tags.map(function(t) {
+            return chip(t, t, allProjects.filter(function(p) { return projectHasTag(p, t); }).length);
+        }).join('') +
+        (untagged ? chip('Untagged', UNTAGGED, untagged, true) : '');
+    box.style.display = '';
+}
+
+function setTagFilter(tag) {
+    tagFilter = tag || '';
+    try { localStorage.setItem('tag_filter', tagFilter); } catch (e) {}
+    currentPage = 1;
+    renderTagFilter();
+    renderPage();
+}
+
+// ---- Tags in the project settings panel ----
+function renderTagsSection(id) {
+    var proj = allProjects.filter(function(p) { return p.id === id; })[0] || {};
+    var chips = (proj.tags || []).map(function(t) {
+        return '<span class="tag-edit">' + esc(t) + '<button type="button" class="tag-x" aria-label="Remove tag ' + esc(t) + '" ' +
+            'data-tag="' + esc(t) + '" onclick="doRemoveTag(\'' + esc(id) + '\', this.dataset.tag)">&#x2715;</button></span>';
+    }).join('');
+    var opts = allTags().map(function(t) { return '<option value="' + esc(t) + '">'; }).join('');
+    return '<div class="settings-section" id="tags-sec-' + esc(id) + '">' +
+        '<div class="settings-section-title">Tags</div>' +
+        '<div class="tag-edit-list">' + chips + '</div>' +
+        '<form onsubmit="return doAddTag(event, \'' + esc(id) + '\')">' +
+            '<input class="webhook-input" name="tag" list="tag-suggestions" maxlength="40" autocomplete="off" aria-label="Add a tag" ' +
+                'placeholder="Add a tag and press Enter" style="width:100%;box-sizing:border-box">' +
+            '<datalist id="tag-suggestions">' + opts + '</datalist>' +
+        '</form>' +
+        '<div class="settings-hint">Tags filter the project list and group your Awesome page.</div>' +
+    '</div>';
+}
+
+function saveTags(id, tags) {
+    fetch('/api/project-tags', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({repo_id: id, tags: tags})
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
+        return r.json();
+    }).then(function(res) {
+        allProjects.forEach(function(p) { if (p.id === id) p.tags = res.tags; });
+        var sec = document.getElementById('tags-sec-' + id);
+        if (sec) {
+            sec.outerHTML = renderTagsSection(id);
+            var inp = document.querySelector('#tags-sec-' + id + ' input[name=tag]');
+            if (inp) inp.focus();
+        }
+        renderTagFilter();
+        renderPage();
+    }).catch(function(err) { toast('Error: ' + err.message, 'err'); });
+}
+
+function doAddTag(e, id) {
+    e.preventDefault();
+    var tag = e.target.elements.tag.value.trim();
+    if (!tag) return false;
+    var proj = allProjects.filter(function(p) { return p.id === id; })[0] || {};
+    saveTags(id, (proj.tags || []).concat([tag]));
+    return false;
+}
+
+function doRemoveTag(id, tag) {
+    var proj = allProjects.filter(function(p) { return p.id === id; })[0] || {};
+    saveTags(id, (proj.tags || []).filter(function(t) { return t.toLowerCase() !== tag.toLowerCase(); }));
+}
+
 function renderPage() {
+    var visible = visibleProjects();
     var start = (currentPage - 1) * pageSize;
-    var pageProjects = allProjects.slice(start, start + pageSize);
+    var pageProjects = visible.slice(start, start + pageSize);
     var pageIDs = {};
     pageProjects.forEach(function(p) { pageIDs[p.id] = true; });
     var pageReleases = allReleases.filter(function(r) { return pageIDs[r.project_id]; });
@@ -651,7 +804,7 @@ function renderPage() {
 }
 
 function goToPage(n) {
-    var totalPages = Math.ceil(allProjects.length / pageSize) || 1;
+    var totalPages = Math.ceil(visibleProjects().length / pageSize) || 1;
     if (n < 1 || n > totalPages) return;
     currentPage = n;
     renderPage();
@@ -695,6 +848,7 @@ function loadReleases() {
         allProjects.forEach(function(p, i) { p._idx = i; });
         sortProjects();
         currentPage = 1;
+        renderTagFilter();
         renderPage();
         if (_settingsRepoID) {
             var fresh = allProjects.filter(function(p) { return p.id === _settingsRepoID; })[0];
@@ -754,7 +908,8 @@ function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImm
 }
 
 function renderSettingsPanelBody(id, pushEnabled, hooks, glEnabled, glFreq, glError, includePre) {
-    return '<div class="settings-section">' +
+    return renderTagsSection(id) +
+        '<div class="settings-section">' +
             '<div class="settings-section-title">Push Notifications</div>' +
             '<div class="toggle-row">' +
                 '<span>Notify on new releases</span>' +
@@ -1033,7 +1188,8 @@ function doDelete(btn) {
                 toast('Project deleted.');
                 allProjects = allProjects.filter(function(p) { return p.id !== id; });
                 allReleases = allReleases.filter(function(rel) { return rel.project_id !== id; });
-                var totalPages = Math.ceil(allProjects.length / pageSize) || 1;
+                renderTagFilter();
+                var totalPages = Math.ceil(visibleProjects().length / pageSize) || 1;
                 if (currentPage > totalPages) currentPage = totalPages;
                 renderPage();
             } else {

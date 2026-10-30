@@ -16,7 +16,7 @@ func TestBuildAwesomeReadmeGroupsByPlatform(t *testing.T) {
 		{RepoName: "zeta", RepoURL: "https://github.com/o/zeta", Platform: "github"},
 		{RepoName: "some-gl-project", RepoURL: "https://gitlab.com/o/some-gl-project", Platform: "gitlab"},
 	}
-	out := buildAwesomeReadme(targets)
+	out := buildAwesomeReadme(targets, nil, nil)
 
 	githubIdx := strings.Index(out, "## Github")
 	gitlabIdx := strings.Index(out, "## Gitlab")
@@ -33,7 +33,7 @@ func TestBuildAwesomeReadmeGroupsByPlatform(t *testing.T) {
 }
 
 func TestBuildAwesomeReadmeEmpty(t *testing.T) {
-	out := buildAwesomeReadme(nil)
+	out := buildAwesomeReadme(nil, nil, nil)
 	if !strings.Contains(out, "No synced repos yet") {
 		t.Errorf("expected empty-state message, got:\n%s", out)
 	}

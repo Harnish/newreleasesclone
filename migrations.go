@@ -175,6 +175,22 @@ var migrations = []migration{
 		// Set when GitLab rejects the saved token; cleared by saving a new token or a successful sync.
 		`ALTER TABLE gitlab_settings ADD COLUMN token_invalid INTEGER NOT NULL DEFAULT 0`,
 	}},
+	{version: 18, stmts: []string{
+		// Tags are per user (like include_prereleases), case-insensitive, and go away with the tracked repo.
+		`CREATE TABLE repo_tags (
+			user_id TEXT NOT NULL,
+			repo_id TEXT NOT NULL,
+			tag     TEXT NOT NULL COLLATE NOCASE,
+			PRIMARY KEY (user_id, repo_id, tag),
+			FOREIGN KEY (user_id, repo_id) REFERENCES user_repos(user_id, repo_id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE tag_descriptions (
+			user_id     TEXT NOT NULL REFERENCES users(id),
+			tag         TEXT NOT NULL COLLATE NOCASE,
+			description TEXT NOT NULL DEFAULT '',
+			PRIMARY KEY (user_id, tag)
+		)`,
+	}},
 }
 
 func migrate(db *sql.DB) error { return runMigrations(db, migrations) }
