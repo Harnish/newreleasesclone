@@ -144,23 +144,6 @@ body {
 .releases-area {}
 #releases-root {}
 
-/* Wide screens: Add Project is a permanent column beside the list, not an overlay */
-@media (min-width: 1100px) {
-    .content { max-width: 1400px; }
-    .releases-area { display: flex; align-items: flex-start; gap: 1.5rem; }
-    #releases-root { flex: 1; min-width: 0; }
-    .add-panel {
-        position: sticky;
-        top: 1rem;
-        flex: 0 0 300px;
-        overflow: visible;
-        transform: none;
-        visibility: visible;
-        transition: none;
-    }
-    .add-panel-inner { border: 1px solid #2d4a6e; border-radius: 8px; min-height: 0; }
-    .add-panel-inner .btn-ghost, .releases-header .btn-primary { display: none; }
-}
 
 /* ---- Slide-over panels (fixed overlay, slides in from right) ---- */
 .add-panel, .settings-panel, .account-panel {
@@ -472,3 +455,21 @@ img.proj-icon { object-fit: contain; background: #e2e8f0; padding: 1px; }
 .detail-ver { border-top: 1px solid #334155; padding: 0.6rem 0; }
 .detail-notes { margin-top: 0.4rem; font-size: 0.8rem; color: #cbd5e1; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9rem; overflow-y: auto; }
 .detail-empty { color: #8796ad; font-size: 0.85rem; }
+
+/* Wide screens: Add Project is a permanent column beside the list, not an overlay */
+@media (min-width: 1100px) {
+    .content { max-width: 1400px; }
+    .releases-area { display: flex; align-items: flex-start; gap: 1.5rem; }
+    #releases-root { flex: 1; min-width: 0; }
+    .add-panel {
+        position: sticky;
+        top: 1rem;
+        flex: 0 0 300px;
+        overflow: visible;
+        transform: none;
+        visibility: visible;
+        transition: none;
+    }
+    .add-panel-inner { border: 1px solid #2d4a6e; border-radius: 8px; min-height: 0; }
+    .add-panel-inner .btn-ghost, .releases-header .btn-primary { display: none; }
+}
