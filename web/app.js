@@ -195,6 +195,29 @@ function closeAddPanel() {
     document.getElementById('add-panel').classList.remove('open');
 }
 
+// ---- Project detail popup ----
+function openProjectDetail(id) {
+    var proj = allProjects.filter(function(p) { return p.id === id; })[0] || {};
+    var rels = allReleases.filter(function(r) { return r.project_id === id; })
+        .sort(function(a, b) { return Date.parse(b.published_at) - Date.parse(a.published_at); })
+        .slice(0, 10);
+    var rows = rels.map(function(r) {
+        var notes = r.release_notes || r.description || '';
+        return '<div class="detail-ver">' +
+            '<div class="ver-top"><a class="ver-link" href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.version) + '</a>' +
+            (r.prerelease ? ' <span class="pre-tag">pre</span>' : '') +
+            '<span class="ver-date">' + fmtAge(r.published_at) + '</span></div>' +
+            (notes ? '<div class="detail-notes">' + esc(notes) + '</div>' : '') +
+        '</div>';
+    }).join('') || '<p class="detail-empty">No versions yet.</p>';
+    document.getElementById('detail-body').innerHTML =
+        '<div class="add-panel-title"><span>' + projIconHTML(proj, proj.name || '', proj.platform || '') + ' ' + esc(proj.name || '') +
+        (proj.platform ? ' <span class="badge ' + esc(proj.platform) + '">' + esc(proj.platform) + '</span>' : '') + '</span>' +
+        '<button class="btn btn-ghost" aria-label="Close" onclick="document.getElementById(\'detail-dialog\').close()">&#x2715;</button></div>' +
+        '<div class="settings-section-title">Last ' + rels.length + ' version' + (rels.length === 1 ? '' : 's') + '</div>' + rows;
+    document.getElementById('detail-dialog').showModal();
+}
+
 // ---- Account panel ----
 function openAccountPanel() {
     closeAddPanel();
@@ -535,7 +558,7 @@ function buildReleasesHTML(releases, projects) {
             '<div class="proj-header">' +
                 '<div class="proj-header-left">' +
                     projIconHTML(proj, pname, platform) +
-                    '<span class="proj-name">' + esc(pname) + '</span>' +
+                    '<button class="proj-name proj-name-btn" title="Show versions" data-id="' + esc(pid) + '" onclick="openProjectDetail(this.dataset.id)">' + esc(pname) + '</button>' +
                     (platform ? '<span class="badge ' + esc(platform) + '">' + esc(platform) + '</span>' : '') +
                     backupLink +
                 '</div>' +
@@ -1374,3 +1397,7 @@ function toggleNotifications() {
 // ---- Boot ----
 onPlatformChange();
 init();
+
+document.getElementById('detail-dialog').addEventListener('click', function(e) {
+    if (e.target === this) this.close(); // backdrop click
+});

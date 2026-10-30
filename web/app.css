@@ -459,3 +459,16 @@ img.proj-icon { object-fit: contain; background: #e2e8f0; padding: 1px; }
 .proj-icon.letter.docker           { background: #0c2a42; color: #38bdf8; }
 .proj-icon.letter.helm-artifacthub { background: #1a2e1a; color: #4ade80; }
 .proj-icon.letter.helm-repo        { background: #1a2e1a; color: #86efac; }
+
+/* ---- Project detail popup ---- */
+.proj-name-btn { background: none; border: none; color: inherit; font-family: inherit; cursor: pointer; text-align: left; }
+.proj-name-btn:hover { color: #60a5fa; text-decoration: underline; }
+.proj-name-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.detail-dialog {
+    background: #1a2840; color: #e2e8f0; border: 1px solid #2d4a6e; border-radius: 8px;
+    padding: 1.1rem 1rem; width: min(600px, calc(100vw - 2rem)); max-height: 80vh; margin: auto;
+}
+.detail-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.detail-ver { border-top: 1px solid #334155; padding: 0.6rem 0; }
+.detail-notes { margin-top: 0.4rem; font-size: 0.8rem; color: #cbd5e1; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9rem; overflow-y: auto; }
+.detail-empty { color: #8796ad; font-size: 0.85rem; }
