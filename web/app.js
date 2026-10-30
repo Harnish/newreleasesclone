@@ -389,7 +389,7 @@ function loadAccountPanel() {
             awesomeNameInput.className = 'webhook-input';
             awesomeNameInput.placeholder = 'Repo name (e.g. my-awesome-repos)';
             awesomeNameInput.value = gitlabSettings.awesome_repo_name || '';
-            awesomeNameInput.style.cssText = 'width:100%;margin-top:0.3rem;box-sizing:border-box;display:' + (gitlabSettings.awesome_enabled ? 'block' : 'none');
+            awesomeNameInput.style.cssText = 'width:100%;margin-top:0.3rem;box-sizing:border-box';
             glSection.appendChild(awesomeNameInput);
 
             body.appendChild(glSection);
@@ -440,9 +440,9 @@ function onAwesomeToggle(checkbox) {
     if (checkbox.checked && !repoName) {
         toast('Enter a repo name for the Awesome page', 'err');
         checkbox.checked = false;
+        nameInput.focus();
         return;
     }
-    nameInput.style.display = checkbox.checked ? 'block' : 'none';
     fetch('/api/gitlab-settings/awesome', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -458,7 +458,6 @@ function onAwesomeToggle(checkbox) {
         });
     }).catch(function(err) {
         checkbox.checked = !checkbox.checked;
-        nameInput.style.display = checkbox.checked ? 'block' : 'none';
         toast('Error: ' + err, 'err');
     });
 }
