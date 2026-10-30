@@ -29,7 +29,7 @@ go build -o newreleases .
 # → http://localhost:8080
 ```
 
-Register an account on first visit, then add projects to track.
+Register an account on first visit, then add projects to track. On screens 1100px or wider the Add Project form sits in a permanent column beside the project list; on narrower screens it slides in from the right.
 
 ### Environment Variables
 
