@@ -13,6 +13,7 @@
 
 ## Done
 
+- [x] **GitLab token-expired banner** — a 401 from GitLab (or git rejecting the token on push) flags the user's token (`gitlab_settings.token_invalid`, migration 17); a red banner at the top of the app links to `<their GitLab>/-/user_settings/personal_access_tokens?name=newreleases&scopes=api` and to Account settings. Cleared by saving a new token or by a sync that succeeds. A 403 does not flag it (that can be one project's permissions). Shows after the next sync attempt, not instantly
 - [x] **Favicon** — `web/favicon.svg` (white up-arrow on a blue rounded square, matching the UI's blue), linked from `index.html` and served at `/static/favicon.svg`
 - [x] **Project description in popup** — each repo's upstream description (GitHub, GitLab, npm, PyPI, Docker Hub, Artifact Hub, Helm repo index) is looked up in the background after a refresh, stored in `repos.description` (migration 16; capped at 500 chars) and shown at the top of the project popup. Re-checked at most daily so GitHub's 60/hour unauthenticated limit isn't burned; a failed lookup keeps the old text. Existing projects fill in on their next refresh
 - [x] **Project detail popup** — clicking a project name opens a dialog with its last 10 versions (date, `pre` badge, release notes, link to the release); built from data already loaded in the page. descriptions came later (see above)

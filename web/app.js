@@ -121,6 +121,7 @@ function showApp() {
     document.getElementById('app-page').style.display = '';
     document.getElementById('username-display').textContent = currentUser.email;
     updateVerifyBanner();
+    updateGitLabTokenBanner();
     fetch('/api/refresh-check').catch(function() {});
     initNotifications();
     if (currentUser.page_size && [5, 10, 20].indexOf(currentUser.page_size) !== -1) {
@@ -128,6 +129,13 @@ function showApp() {
         localStorage.setItem('page_size', String(pageSize));
     }
     loadReleases();
+}
+
+function updateGitLabTokenBanner() {
+    var url = currentUser && currentUser.gitlab_token_url;
+    var ok = /^https?:\/\//i.test(url || '');
+    if (ok) document.getElementById('gitlab-token-link').href = url;
+    document.getElementById('gitlab-token-banner').style.display = ok ? '' : 'none';
 }
 
 function updateVerifyBanner() {
@@ -429,6 +437,8 @@ function saveGitLabSettings() {
     }).then(function(r) {
         if (!r.ok) return r.text().then(function(t) { throw new Error(t.trim()); });
         toast('GitLab settings saved', 'ok');
+        currentUser.gitlab_token_url = '';
+        updateGitLabTokenBanner();
         document.getElementById('gitlab-token-input').value = '';
         document.getElementById('gitlab-token-input').placeholder = 'Token saved (enter to replace)';
     }).catch(function(err) { toast('Error: ' + err, 'err'); });

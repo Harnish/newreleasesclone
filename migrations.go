@@ -171,6 +171,10 @@ var migrations = []migration{
 		`ALTER TABLE repos ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE repos ADD COLUMN description_checked_at INTEGER NOT NULL DEFAULT 0`,
 	}},
+	{version: 17, stmts: []string{
+		// Set when GitLab rejects the saved token; cleared by saving a new token or a successful sync.
+		`ALTER TABLE gitlab_settings ADD COLUMN token_invalid INTEGER NOT NULL DEFAULT 0`,
+	}},
 }
 
 func migrate(db *sql.DB) error { return runMigrations(db, migrations) }

@@ -143,3 +143,38 @@ func TestGetAllEnabledGitLabSyncTargetsRequiresGitLabSettings(t *testing.T) {
 		t.Errorf("GetAllEnabledGitLabSyncTargets = %d targets, want 0 when gitlab_settings is unconfigured", len(targets))
 	}
 }
+
+func TestGitLabTokenInvalidFlag(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+	if err := s.SaveGitLabSettings(userID, "https://gitlab.example.com/", "old", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GitLabTokenInvalidURL(userID); got != "" {
+		t.Fatalf("url = %q before any failure", got)
+	}
+
+	s.noteGitLabAuth(userID, fmt.Errorf("gitlab: create project x failed, status 500")) // not an auth problem
+	if got := s.GitLabTokenInvalidURL(userID); got != "" {
+		t.Fatalf("a non-auth error flagged the token: %q", got)
+	}
+
+	s.noteGitLabAuth(userID, fmt.Errorf("check mirror project: %w: nope", errGitLabUnauthorized))
+	want := "https://gitlab.example.com/-/user_settings/personal_access_tokens?name=newreleases&scopes=api"
+	if got := s.GitLabTokenInvalidURL(userID); got != want {
+		t.Fatalf("url = %q, want %q", got, want)
+	}
+
+	if err := s.RecordGitLabSync(userID, "r", nil); err != nil { // a sync that worked clears it
+		t.Fatal(err)
+	}
+	if got := s.GitLabTokenInvalidURL(userID); got != "" {
+		t.Fatalf("a successful sync left the flag: %q", got)
+	}
+
+	s.noteGitLabAuth(userID, fmt.Errorf("git push: remote: HTTP Basic: Access denied"))
+	s.SaveGitLabSettings(userID, "https://gitlab.example.com/", "new", "") // saving a new token clears it
+	if got := s.GitLabTokenInvalidURL(userID); got != "" {
+		t.Fatalf("saving a new token left the flag: %q", got)
+	}
+}

@@ -62,8 +62,9 @@ func handleMe(w http.ResponseWriter, r *http.Request, userID string) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(struct {
 		*User
-		SMTPEnabled bool `json:"smtp_enabled"`
-	}{user, smtpEnabled})
+		SMTPEnabled    bool   `json:"smtp_enabled"`
+		GitLabTokenURL string `json:"gitlab_token_url,omitempty"` // set only while GitLab rejects the saved token
+	}{user, smtpEnabled, store.GitLabTokenInvalidURL(userID)})
 }
 
 // GET /verify-email?token=xxx — verifies email token, redirects with result query param.
@@ -557,6 +558,7 @@ func handleGitLabAwesome(w http.ResponseWriter, r *http.Request, userID string) 
 	w.Header().Set("Content-Type", "application/json")
 	if req.Enabled {
 		if err := store.syncAwesomePage(userID); err != nil {
+			store.noteGitLabAuth(userID, err)
 			json.NewEncoder(w).Encode(map[string]string{"status": "saved", "warning": err.Error()})
 			return
 		}

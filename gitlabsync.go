@@ -28,6 +28,7 @@ func (s *Store) syncProjectToGitLab(t GitLabSyncTarget) {
 		log.Printf("gitlab sync: syncing awesome page user=%s", t.UserID)
 		if awErr := s.syncAwesomePage(t.UserID); awErr != nil {
 			log.Printf("⚠ awesome page sync failed for user=%s: %v", t.UserID, awErr)
+			s.noteGitLabAuth(t.UserID, awErr)
 		} else {
 			log.Printf("gitlab sync: awesome page sync complete user=%s", t.UserID)
 		}
