@@ -13,7 +13,8 @@
 
 ## Done
 
-- [x] **Project detail popup** — clicking a project name opens a dialog with its last 10 versions (date, `pre` badge, release notes, link to the release); built from data already loaded in the page. Upstream project descriptions aren't fetched or stored yet
+- [x] **Project description in popup** — each repo's upstream description (GitHub, GitLab, npm, PyPI, Docker Hub, Artifact Hub, Helm repo index) is looked up in the background after a refresh, stored in `repos.description` (migration 16; capped at 500 chars) and shown at the top of the project popup. Re-checked at most daily so GitHub's 60/hour unauthenticated limit isn't burned; a failed lookup keeps the old text. Existing projects fill in on their next refresh
+- [x] **Project detail popup** — clicking a project name opens a dialog with its last 10 versions (date, `pre` badge, release notes, link to the release); built from data already loaded in the page. descriptions came later (see above)
 - [x] **Wide-screen layout** — at ≥1100px the Add Project form is a permanent sticky column to the right of the project list (list width and Account/project settings overlays unchanged); below that it stays a slide-over
 - [x] **Helm repo prereleases** — `fetchHelmRepo` dropped every version containing `-` before the prerelease logic ran, so the include-prereleases toggle did nothing for Helm repos; it now keeps the newest 10 stable + 5 prereleases by publish date (SemVer `-suffix` counts as prerelease) and skips undated entries
 - [x] **Icon downloads can't reach allowlisted hosts** — icon URLs come from third-party Helm indexes, so they use a strict client that ignores `GITLAB_ALLOWED_HOSTS`, except for the Helm repo's own host

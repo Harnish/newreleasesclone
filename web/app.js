@@ -214,6 +214,7 @@ function openProjectDetail(id) {
         '<div class="add-panel-title"><span>' + projIconHTML(proj, proj.name || '', proj.platform || '') + ' ' + esc(proj.name || '') +
         (proj.platform ? ' <span class="badge ' + esc(proj.platform) + '">' + esc(proj.platform) + '</span>' : '') + '</span>' +
         '<button class="btn btn-ghost" aria-label="Close" onclick="document.getElementById(\'detail-dialog\').close()">&#x2715;</button></div>' +
+        (proj.description ? '<p class="detail-desc">' + esc(proj.description) + '</p>' : '') +
         '<div class="settings-section-title">Last ' + rels.length + ' version' + (rels.length === 1 ? '' : 's') + '</div>' + rows;
     document.getElementById('detail-dialog').showModal();
 }

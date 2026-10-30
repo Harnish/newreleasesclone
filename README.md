@@ -7,7 +7,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub, Helm (Artifact Hub & custom repos)
 - **User accounts**: Register/login with session-based auth; each user tracks their own set of projects
 - **Shared release data**: Two users adding the same repo share one set of fetched releases
-- **Project detail**: click a project name to see its last 10 versions with dates, prerelease badges and release notes in a popup
+- **Project detail**: click a project name to see its upstream description and last 10 versions with dates, prerelease badges and release notes in a popup
 - **Build info**: the running build's commit SHA is shown in the bottom-right corner (set via the `GIT_SHA` build arg; `docker-compose` reads it from your environment, e.g. `GIT_SHA=$(git rev-parse --short HEAD) docker-compose up --build`)
 - **Prereleases**: Alpha/beta/rc versions are detected per platform and hidden by default. Turn on "Include prereleases" in a project's settings panel to see them (marked `pre`) and get notified about them. Webhook payloads include a `prerelease` flag per release. npm and PyPI keep the 10 newest stable releases plus the 5 newest prereleases, ordered by publish date. Detection uses the platform's own flag where there is one (GitHub, GitLab, Artifact Hub) and a version-string heuristic for npm, PyPI, Docker and Helm repos
 - **Project icons**: GitHub owner avatars, GitLab project avatars, Artifact Hub logos and Helm chart icons appear next to project names; npm, PyPI and Docker projects get a letter badge. Icons are downloaded and cached by the server (re-checked weekly) and served from `/api/icon`, so your browser never contacts GitHub or other third parties for them

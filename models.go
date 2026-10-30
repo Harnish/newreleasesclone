@@ -40,6 +40,7 @@ type Project struct {
 	PushEnabled         bool      `json:"push_enabled"`
 	EmailImmediate      bool      `json:"email_immediate"`
 	IncludePrereleases  bool      `json:"include_prereleases"`
+	Description         string    `json:"description,omitempty"`  // upstream project description, "" until looked up
 	IconVersion         int64     `json:"icon_version,omitempty"` // unix time the icon was fetched; 0 = no icon
 	GitLabSyncEnabled   bool      `json:"gitlab_sync_enabled"`
 	GitLabSyncFrequency string    `json:"gitlab_sync_frequency,omitempty"`

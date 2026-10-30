@@ -473,3 +473,4 @@ img.proj-icon { object-fit: contain; background: #e2e8f0; padding: 1px; }
     .add-panel-inner { border: 1px solid #2d4a6e; border-radius: 8px; min-height: 0; }
     .add-panel-inner .btn-ghost, .releases-header .btn-primary { display: none; }
 }
+.detail-desc { font-size: 0.85rem; color: #cbd5e1; margin-bottom: 1rem; overflow-wrap: anywhere; }
