@@ -8,12 +8,12 @@
 - [x] **Main page sort options** - sort by date added, latest release, and alphabetically.
 - [x] **Determine if a release is a prerelease or not** - allow the user per project to be notified about prereleases.
 - [x] **Use project icon** - Put the project icon to the left of the project name.  
-- [ ] **screen usage** - on the phone it looks great but on the computer there can be more usable space  if the width is computer wide put the add repo to the right of the releases without shrinking the repos space and alway have it open  
 - [x] **add commit sha to build info** - need a way to determine which build is being run from the ui
 - [x] **user email as username** - usernames can end up being duplicate.  But email addresses have to be unique. Usernames should probably just be removed completely and only use email addresses.
 
 ## Done
 
+- [x] **Wide-screen layout** — at ≥1100px the Add Project form is a permanent sticky column to the right of the project list (list width and Account/project settings overlays unchanged); below that it stays a slide-over
 - [x] **Helm repo prereleases** — `fetchHelmRepo` dropped every version containing `-` before the prerelease logic ran, so the include-prereleases toggle did nothing for Helm repos; it now keeps the newest 10 stable + 5 prereleases by publish date (SemVer `-suffix` counts as prerelease) and skips undated entries
 - [x] **Icon downloads can't reach allowlisted hosts** — icon URLs come from third-party Helm indexes, so they use a strict client that ignores `GITLAB_ALLOWED_HOSTS`, except for the Helm repo's own host
 - [x] **Split `main_test.go`** — 2,129 lines into `testhelpers_test.go`, `store_test.go`, `handlers_projects_test.go`, `email_test.go`, `account_test.go`, `feed_test.go`, `auth_test.go`, `migrations_v10_test.go` and `fetchers_test.go`; identical set of 146 tests/benchmarks
