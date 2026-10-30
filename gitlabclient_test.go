@@ -239,3 +239,16 @@ func TestGitLabClientExplainsAuthFailures(t *testing.T) {
 		t.Fatalf("err = %v, want GitLab's reason and the scope hint", err)
 	}
 }
+
+func TestGitLabClientSurfacesCreateFailureReason(t *testing.T) {
+	withLoopbackAllowedForTests(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"message": {"path": ["has already been taken"]}}`) // validation errors are objects
+	}))
+	defer srv.Close()
+	_, err := newGitLabClient(srv.URL, "tok").CreateProject(0, "anyps5")
+	if err == nil || !strings.Contains(err.Error(), "has already been taken") || !strings.Contains(err.Error(), "400") {
+		t.Fatalf("err = %v, want the status and GitLab's reason", err)
+	}
+}

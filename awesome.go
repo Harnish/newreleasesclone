@@ -59,7 +59,11 @@ func (s *Store) syncAwesomePage(userID string) error {
 
 	httpURL := settings.AwesomeGitLabPath
 	if httpURL == "" {
-		path := slugify(settings.AwesomeRepoName)
+		name := slugify(settings.AwesomeRepoName)
+		path, err := client.PersonalPath(name)
+		if err != nil {
+			return fmt.Errorf("look up gitlab user: %w", err)
+		}
 		exists, err := client.ProjectExists(path)
 		if err != nil {
 			return fmt.Errorf("check awesome project: %w", err)
@@ -67,7 +71,7 @@ func (s *Store) syncAwesomePage(userID string) error {
 		if exists {
 			httpURL, err = client.GetProjectHTTPURL(path)
 		} else {
-			httpURL, err = client.CreateProject(0, path)
+			httpURL, err = client.CreateProject(0, name)
 		}
 		if err != nil {
 			return fmt.Errorf("create/get awesome project: %w", err)

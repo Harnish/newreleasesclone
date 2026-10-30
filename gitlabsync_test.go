@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -46,7 +47,10 @@ func TestDoSyncProjectToGitLabCreatesAndPushes(t *testing.T) {
 
 	// fake gitlab API: project doesn't exist yet, CreateProject returns bareURL
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/projects/my-repo", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"username": "alice"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/"+url.PathEscape("alice/my-repo"), func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
@@ -238,4 +242,46 @@ func runGitCmdOutput(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
 	}
 	return string(out)
+}
+
+// A project that already exists in the token owner's namespace is adopted,
+// not re-created (a bare-name lookup reads as "not found" and used to end in a 400).
+func TestDoSyncAdoptsExistingPersonalProject(t *testing.T) {
+	withLoopbackAllowedForTests(t)
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+	repoID, _ := s.AddRepo(userID, Project{Name: "repo", Platform: "github", RepoURL: "https://github.com/o/r"})
+
+	originDir := t.TempDir()
+	runGitCmd(t, originDir, "init", "-b", "main")
+	runGitCmd(t, originDir, "-c", "user.email=a@b.c", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init")
+	bareDir := t.TempDir()
+	runGitCmd(t, bareDir, "init", "--bare", "-b", "main")
+	bareURL := "file://" + bareDir
+
+	created := false
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"username": "alice"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/"+url.PathEscape("alice/my-repo"), func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"http_url_to_repo": bareURL})
+	})
+	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
+		created = true
+		w.WriteHeader(http.StatusBadRequest)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	err := s.doSyncProjectToGitLab(GitLabSyncTarget{
+		UserID: userID, RepoID: repoID, RepoName: "my-repo", RepoURL: "file://" + originDir,
+		Platform: "github", GitLabURL: srv.URL, GitLabToken: "tok",
+	})
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if created {
+		t.Fatal("tried to create a project that already exists")
+	}
 }

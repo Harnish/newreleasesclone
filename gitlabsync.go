@@ -69,6 +69,11 @@ func (s *Store) doSyncProjectToGitLab(t GitLabSyncTarget) error {
 				return fmt.Errorf("ensure gitlab group %s: %w", groupPath, err)
 			}
 			fullPath = groupPath + "/" + name
+		} else {
+			var err error
+			if fullPath, err = client.PersonalPath(name); err != nil {
+				return fmt.Errorf("look up gitlab user: %w", err)
+			}
 		}
 
 		log.Printf("gitlab sync: checking mirror project user=%s repo=%s path=%s", t.UserID, t.RepoID, fullPath)

@@ -246,6 +246,9 @@ func (c *GitLabClient) do(method, path string, reqBody, out any) (int, error) {
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return resp.StatusCode, authError(method, path, resp)
 	}
+	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound { // callers treat 404 as "doesn't exist"
+		return resp.StatusCode, fmt.Errorf("gitlab %s %s failed with %d: %s", method, path, resp.StatusCode, gitlabReason(resp))
+	}
 	if out != nil && resp.StatusCode < 300 {
 		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 			return resp.StatusCode, fmt.Errorf("decode response for %s %s: %w", method, path, err)
@@ -254,19 +257,52 @@ func (c *GitLabClient) do(method, path string, reqBody, out any) (int, error) {
 	return resp.StatusCode, nil
 }
 
+// gitlabReason pulls GitLab's explanation out of an error response. "message"
+// is a string for most errors but an object for validation failures, e.g.
+// {"message":{"path":["has already been taken"]}}, so it is kept as raw JSON.
+func gitlabReason(resp *http.Response) string {
+	var body map[string]json.RawMessage
+	json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body)
+	var parts []string
+	for _, k := range []string{"message", "error", "error_description"} {
+		raw, ok := body[k]
+		if !ok {
+			continue
+		}
+		var str string
+		if json.Unmarshal(raw, &str) == nil {
+			parts = append(parts, str)
+		} else {
+			parts = append(parts, string(raw))
+		}
+	}
+	if len(parts) == 0 {
+		return http.StatusText(resp.StatusCode)
+	}
+	return strings.Join(parts, " ")
+}
+
+// PersonalPath returns "<username>/<name>": a project's full path in the token
+// owner's own namespace. GitLab's project lookup needs the namespace, so a
+// bare name always reads as "not found" even when the project exists.
+func (c *GitLabClient) PersonalPath(name string) (string, error) {
+	var me struct {
+		Username string `json:"username"`
+	}
+	status, err := c.do(http.MethodGet, "/user", nil, &me)
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK || me.Username == "" {
+		return "", fmt.Errorf("gitlab: could not determine the token owner's username (status %d)", status)
+	}
+	return me.Username + "/" + name, nil
+}
+
 // authError explains a 401/403, which otherwise surfaces as a bare status:
 // GitLab's own reason, plus the usual cause (a token that can't write).
 func authError(method, path string, resp *http.Response) error {
-	var body struct {
-		Message string `json:"message"`
-		Error   string `json:"error"`
-		Desc    string `json:"error_description"`
-	}
-	json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&body)
-	reason := strings.TrimSpace(strings.Join([]string{body.Message, body.Error, body.Desc}, " "))
-	if reason == "" {
-		reason = http.StatusText(resp.StatusCode)
-	}
+	reason := gitlabReason(resp)
 	err := fmt.Errorf("gitlab rejected %s %s with %d (%s): the token must be a personal access token with the \"api\" scope that hasn't expired or been revoked; project and group access tokens can't create projects",
 		method, path, resp.StatusCode, reason)
 	if resp.StatusCode == http.StatusUnauthorized {
