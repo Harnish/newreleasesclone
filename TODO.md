@@ -13,6 +13,7 @@
 
 ## Done
 
+- [x] **Project detail popup** — clicking a project name opens a dialog with its last 10 versions (date, `pre` badge, release notes, link to the release); built from data already loaded in the page. Upstream project descriptions aren't fetched or stored yet
 - [x] **Wide-screen layout** — at ≥1100px the Add Project form is a permanent sticky column to the right of the project list (list width and Account/project settings overlays unchanged); below that it stays a slide-over
 - [x] **Helm repo prereleases** — `fetchHelmRepo` dropped every version containing `-` before the prerelease logic ran, so the include-prereleases toggle did nothing for Helm repos; it now keeps the newest 10 stable + 5 prereleases by publish date (SemVer `-suffix` counts as prerelease) and skips undated entries
 - [x] **Icon downloads can't reach allowlisted hosts** — icon URLs come from third-party Helm indexes, so they use a strict client that ignores `GITLAB_ALLOWED_HOSTS`, except for the Helm repo's own host
