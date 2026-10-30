@@ -16,6 +16,15 @@ import (
 // later reassignment of the global `store` var (e.g. test cleanup swapping
 // it back) can't race a still-running goroutine into a nil-pointer deref.
 func (s *Store) syncProjectToGitLab(t GitLabSyncTarget) {
+	// Enabling sync, "sync now" and the scheduler each launch one of these; two
+	// at once both see "no project yet" and race to create it (one gets a 400).
+	key := t.UserID + "/" + t.RepoID
+	if _, busy := s.gitlabSyncing.LoadOrStore(key, struct{}{}); busy {
+		log.Printf("gitlab sync: already running, skipping user=%s repo=%s", t.UserID, t.RepoID)
+		return
+	}
+	defer s.gitlabSyncing.Delete(key)
+
 	log.Printf("gitlab sync: begin user=%s repo=%s", t.UserID, t.RepoID)
 	err := s.doSyncProjectToGitLab(t)
 	if err != nil {
@@ -69,6 +78,11 @@ func (s *Store) doSyncProjectToGitLab(t GitLabSyncTarget) error {
 				return fmt.Errorf("ensure gitlab group %s: %w", groupPath, err)
 			}
 			fullPath = groupPath + "/" + name
+		} else {
+			var err error
+			if fullPath, err = client.PersonalPath(name); err != nil {
+				return fmt.Errorf("look up gitlab user: %w", err)
+			}
 		}
 
 		log.Printf("gitlab sync: checking mirror project user=%s repo=%s path=%s", t.UserID, t.RepoID, fullPath)

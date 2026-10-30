@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -64,7 +66,10 @@ func TestSyncAwesomePageCreatesAndPushes(t *testing.T) {
 	bareURL := "file://" + bareDir
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/projects/my-awesome", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"username": "alice"}`)
+	})
+	mux.HandleFunc("/api/v4/projects/"+url.PathEscape("alice/my-awesome"), func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
