@@ -71,6 +71,13 @@
     <button onclick="dismissVerifyBanner()" style="background:none;border:none;color:#fbbf24;cursor:pointer;float:right;font-size:1rem">&#x2715;</button>
 </div>
 
+<div id="gitlab-token-banner" role="alert" style="display:none;background:#3b0000;color:#fca5a5;border-bottom:1px solid #7f1d1d;padding:0.6rem 1.1rem;font-size:0.85rem">
+    GitLab no longer accepts your saved token, so syncing is paused.
+    <a id="gitlab-token-link" target="_blank" rel="noopener noreferrer" style="color:#fecaca;font-weight:600">Create a new token on your GitLab server</a>
+    (scope: api), then paste it into <button onclick="openAccountPanel()" style="background:none;border:none;color:#fecaca;text-decoration:underline;cursor:pointer;font-size:0.85rem;padding:0">Account settings</button>.
+    <button onclick="document.getElementById('gitlab-token-banner').style.display='none'" aria-label="Dismiss" style="background:none;border:none;color:#fca5a5;cursor:pointer;float:right;font-size:1rem">&#x2715;</button>
+</div>
+
 <div class="content">
     <div class="releases-header">
         <span class="releases-title">Projects</span>

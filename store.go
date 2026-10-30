@@ -325,6 +325,7 @@ func (s *Store) SaveGitLabSettings(userID, gitlabURL, token, group string) error
 			gitlab_url = excluded.gitlab_url,
 			gitlab_token = excluded.gitlab_token,
 			gitlab_group = excluded.gitlab_group,
+			token_invalid = 0,
 			updated_at = excluded.updated_at`,
 		userID, gitlabURL, token, group, time.Now().Format(time.RFC3339))
 	return err
@@ -427,7 +428,30 @@ func (s *Store) RecordGitLabSync(userID, repoID string, syncErr error) error {
 		SET last_gitlab_sync_at = ?, last_gitlab_sync_error = ?
 		WHERE user_id = ? AND repo_id = ?`,
 		time.Now().Format(time.RFC3339), errMsg, userID, repoID)
+	if syncErr == nil {
+		s.db.Exec("UPDATE gitlab_settings SET token_invalid = 0 WHERE user_id = ?", userID) // it worked, so the token is fine
+	} else {
+		s.noteGitLabAuth(userID, syncErr)
+	}
 	return err
+}
+
+// noteGitLabAuth flags userID's saved token as no longer working if err says so.
+func (s *Store) noteGitLabAuth(userID string, err error) {
+	if isGitLabAuthError(err) {
+		s.db.Exec("UPDATE gitlab_settings SET token_invalid = 1 WHERE user_id = ?", userID)
+	}
+}
+
+// GitLabTokenInvalidURL returns the page on the user's GitLab where they can
+// create a new token, or "" while the saved token works (or none is saved).
+func (s *Store) GitLabTokenInvalidURL(userID string) string {
+	var base string
+	err := s.db.QueryRow("SELECT gitlab_url FROM gitlab_settings WHERE user_id = ? AND token_invalid = 1", userID).Scan(&base)
+	if err != nil || base == "" {
+		return ""
+	}
+	return strings.TrimSuffix(base, "/") + "/-/user_settings/personal_access_tokens?name=newreleases&scopes=api"
 }
 
 // GetAllEnabledGitLabSyncTargets returns every user's GitLab-sync-enabled

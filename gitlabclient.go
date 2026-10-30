@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -266,8 +267,26 @@ func authError(method, path string, resp *http.Response) error {
 	if reason == "" {
 		reason = http.StatusText(resp.StatusCode)
 	}
-	return fmt.Errorf("gitlab rejected %s %s with %d (%s): the token must be a personal access token with the \"api\" scope that hasn't expired or been revoked; project and group access tokens can't create projects",
+	err := fmt.Errorf("gitlab rejected %s %s with %d (%s): the token must be a personal access token with the \"api\" scope that hasn't expired or been revoked; project and group access tokens can't create projects",
 		method, path, resp.StatusCode, reason)
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("%w: %w", errGitLabUnauthorized, err)
+	}
+	return err // 403 can be one project's permissions, not a dead token
+}
+
+// errGitLabUnauthorized marks a 401: GitLab no longer accepts the saved token.
+var errGitLabUnauthorized = errors.New("gitlab token rejected")
+
+// isGitLabAuthError reports whether err means the saved token stopped working:
+// a REST 401, or git's own rejection when pushing with it.
+func isGitLabAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	m := err.Error()
+	return errors.Is(err, errGitLabUnauthorized) ||
+		strings.Contains(m, "Authentication failed") || strings.Contains(m, "HTTP Basic: Access denied")
 }
 
 var disallowedIPRanges = mustParseCIDRs(
