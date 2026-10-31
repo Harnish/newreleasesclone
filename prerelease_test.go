@@ -33,8 +33,9 @@ func prereleaseFixture(t *testing.T) (*Store, string, string, *http.Cookie) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
-	s.AddRelease(repoID, Release{ID: "gh_1", Name: "P", Version: "1.0.0", Platform: "github", URL: "u", PublishedAt: now.Add(-time.Hour)})
+	// Fixed inside today's UTC day so the digest (same-day) check can't flake just after midnight.
+	now := time.Now().UTC().Truncate(24 * time.Hour).Add(2 * time.Minute)
+	s.AddRelease(repoID, Release{ID: "gh_1", Name: "P", Version: "1.0.0", Platform: "github", URL: "u", PublishedAt: now.Add(-time.Minute)})
 	s.AddRelease(repoID, Release{ID: "gh_2", Name: "P", Version: "1.1.0-rc.1", Platform: "github", URL: "u", PublishedAt: now, Prerelease: true})
 	return s, userID, repoID, cookie
 }
