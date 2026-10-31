@@ -191,6 +191,10 @@ var migrations = []migration{
 			PRIMARY KEY (user_id, tag)
 		)`,
 	}},
+	{version: 19, stmts: []string{
+		// Optional per-user GitHub token, used when mirroring GitHub repos to GitLab (private repos, rate limits).
+		`ALTER TABLE users ADD COLUMN github_token TEXT NOT NULL DEFAULT ''`,
+	}},
 }
 
 func migrate(db *sql.DB) error { return runMigrations(db, migrations) }

@@ -18,7 +18,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **Webhooks**: Per-project outbound webhooks with optional HMAC-SHA256 signing; managed inline from the Projects tab. Delivery uses the same SSRF guard as GitLab sync (private/loopback addresses refused, redirects not followed)
 - **GitLab token check**: if GitLab stops accepting your saved token (expired or revoked), a banner links straight to the token page on your own GitLab server; it clears when you save a new token or a sync succeeds
 - **Tags**: label projects with tags of your own (e.g. "Emulator", "Self hosted") from a project's settings panel; filter the list by tag with the chips above it, describe each tag in Account settings, and the generated Awesome page groups projects by tag with those descriptions
-- **GitLab sync**: Register your own GitLab instance + API token (Account Settings), then opt any GitHub/GitLab project into a daily/weekly/monthly mirror push. Optional "Awesome" README, grouped by platform, auto-generated and pushed to a GitLab project under your namespace
+- **GitLab sync**: Register your own GitLab instance + API token (Account Settings), then opt any GitHub/GitLab project into a daily/weekly/monthly mirror push. Optional "Awesome" README, grouped by platform, auto-generated and pushed to a GitLab project under your namespace. An optional GitHub token (Account Settings) is used when cloning GitHub repos for the mirror, so private repos work. The Account panel's "GitLab sync queue" lists every sync-enabled project with its status and the last sync error
 - **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
 - **Full release notes**: GitHub/GitLab release bodies captured and expandable in the UI
 - **Accessible UI**: keyboard focus rings, screen-reader labels, AA-contrast text, touch-friendly controls on phones
@@ -80,6 +80,7 @@ All data endpoints require a valid session cookie (set by `/api/login` or `/api/
 | `POST` | `/api/gitlab-settings/awesome` | Enable/disable the Awesome page `{enabled, repo_name}` |
 | `POST` | `/api/project-gitlab-sync` | Enable/disable GitLab sync for a project `{repo_id, enabled, frequency}` |
 | `POST` | `/api/project-gitlab-sync/sync-now?repo_id=<id>` | Manually trigger a GitLab sync |
+| `GET` | `/api/gitlab-sync-queue` | Sync-enabled projects with status, last/next sync and last error |
 | `POST` | `/api/project-settings` | Per-project notification settings `{repo_id, push_enabled, email_immediate}` |
 
 

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -740,6 +741,18 @@ func (s *Store) SetEmailDigest(userID string, enabled bool) error {
 	return err
 }
 
+// GetGitHubToken returns the user's GitHub token for mirror clones, or "".
+func (s *Store) GetGitHubToken(userID string) string {
+	var tok string
+	s.db.QueryRow("SELECT github_token FROM users WHERE id = ?", userID).Scan(&tok)
+	return tok
+}
+
+func (s *Store) SetGitHubToken(userID, token string) error {
+	_, err := s.db.Exec("UPDATE users SET github_token = ? WHERE id = ?", token, userID)
+	return err
+}
+
 func (s *Store) SetPageSize(userID string, size int) error {
 	if size != 10 && size != 20 && size != 50 {
 		return fmt.Errorf("invalid page_size %d: must be 10, 20, or 50", size)
@@ -1225,4 +1238,73 @@ func (s *Store) RefreshProject(repoID string) {
 			}
 		}
 	}
+}
+
+// SyncQueueItem is one GitLab-sync-enabled project as the queue view shows it.
+type SyncQueueItem struct {
+	RepoID     string `json:"repo_id"`
+	Name       string `json:"name"`
+	Platform   string `json:"platform"`
+	Frequency  string `json:"frequency"`
+	Status     string `json:"status"` // running | blocked | queued | failed | ok
+	LastSyncAt string `json:"last_sync_at"`
+	NextSyncAt string `json:"next_sync_at"`
+	LastError  string `json:"last_error"`
+}
+
+// GetGitLabSyncQueue lists the user's sync-enabled projects, most urgent first:
+// running, then waiting (blocked/queued), then failed, then the rest by next due time.
+// "queued" means due now; the hourly scheduler picks it up on its next tick.
+func (s *Store) GetGitLabSyncQueue(userID string) ([]SyncQueueItem, error) {
+	gl, _ := s.GetGitLabSettings(userID)
+	configured := gl.GitLabURL != "" && gl.GitLabToken != ""
+	rows, err := s.db.Query(`
+		SELECT r.id, r.name, r.platform, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error
+		FROM user_repos ur INNER JOIN repos r ON r.id = ur.repo_id
+		WHERE ur.user_id = ? AND ur.gitlab_sync_enabled = 1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SyncQueueItem
+	next := map[string]time.Time{}
+	for rows.Next() {
+		var it SyncQueueItem
+		if err := rows.Scan(&it.RepoID, &it.Name, &it.Platform, &it.Frequency, &it.LastSyncAt, &it.LastError); err != nil {
+			return nil, err
+		}
+		last, _ := time.Parse(time.RFC3339, it.LastSyncAt)
+		due := gitlabSyncDue(last, it.Frequency)
+		if !last.IsZero() {
+			next[it.RepoID] = last.Add(gitlabSyncFrequencyDuration(it.Frequency))
+			it.NextSyncAt = next[it.RepoID].Format(time.RFC3339)
+		}
+		_, running := s.gitlabSyncing.Load(userID + "/" + it.RepoID)
+		switch {
+		case running:
+			it.Status = "running"
+		case !configured:
+			it.Status = "blocked"
+			it.LastError = "GitLab URL and token are not configured"
+		case due:
+			it.Status = "queued"
+		case it.LastError != "":
+			it.Status = "failed"
+		default:
+			it.Status = "ok"
+		}
+		items = append(items, it)
+	}
+	rank := map[string]int{"running": 0, "blocked": 1, "queued": 1, "failed": 2, "ok": 3}
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := items[i], items[j]
+		if rank[a.Status] != rank[b.Status] {
+			return rank[a.Status] < rank[b.Status]
+		}
+		if a.Status == "ok" || a.Status == "failed" {
+			return next[a.RepoID].Before(next[b.RepoID])
+		}
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+	})
+	return items, rows.Err()
 }

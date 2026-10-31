@@ -78,6 +78,7 @@ func main() {
 	http.HandleFunc("/api/push/subscribe", requireAuth(handlePushSubscribe))
 	http.HandleFunc("/api/gitlab-settings", requireAuth(handleGitLabSettings))
 	http.HandleFunc("/api/gitlab-settings/awesome", requireAuth(handleGitLabAwesome))
+	http.HandleFunc("/api/gitlab-sync-queue", requireAuth(handleGitLabSyncQueue))
 	http.HandleFunc("/api/project-gitlab-sync", requireAuth(handleProjectGitLabSync))
 	http.HandleFunc("/api/project-gitlab-sync/sync-now", requireAuth(handleProjectGitLabSyncNow))
 

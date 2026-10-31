@@ -212,3 +212,54 @@ func TestHandleAccountSettingsPageSizeInvalid(t *testing.T) {
 		t.Errorf("expected 400 for invalid page_size, got %d", w.Code)
 	}
 }
+
+func TestGitHubToken(t *testing.T) {
+	s := newTestStore(t)
+	oldStore := store
+	store = s
+	defer func() { store = oldStore }()
+	userID, cookie := newTestAuth(t, s)
+
+	post := func(body string) int {
+		req, _ := http.NewRequest("POST", "/api/account-settings", strings.NewReader(body))
+		req.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		requireAuth(handleAccountSettings)(w, req)
+		return w.Code
+	}
+	if c := post(`{"github_token":" ghp_abc123 "}`); c != 200 || s.GetGitHubToken(userID) != "ghp_abc123" {
+		t.Fatalf("save: code=%d token=%q", c, s.GetGitHubToken(userID))
+	}
+	if c := post(`{"github_token":"bad token@x"}`); c != 400 || s.GetGitHubToken(userID) != "ghp_abc123" {
+		t.Fatalf("invalid token: code=%d, want 400 and old token kept", c)
+	}
+	if c := post(`{"page_size":20}`); c != 200 || s.GetGitHubToken(userID) != "ghp_abc123" {
+		t.Fatal("omitting github_token must leave it alone")
+	}
+
+	req, _ := http.NewRequest("GET", "/api/account-settings", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleAccountSettings)(w, req)
+	if strings.Contains(w.Body.String(), "ghp_abc123") || !strings.Contains(w.Body.String(), `"has_github_token":true`) {
+		t.Fatalf("GET must report has_github_token without leaking it: %s", w.Body.String())
+	}
+
+	if c := post(`{"github_token":""}`); c != 200 || s.GetGitHubToken(userID) != "" {
+		t.Fatal("empty string should clear the token")
+	}
+}
+
+func TestGithubAuthURL(t *testing.T) {
+	if got := githubAuthURL("https://github.com/o/r", "tok"); got != "https://x-access-token:tok@github.com/o/r" {
+		t.Errorf("github.com: got %q", got)
+	}
+	for _, u := range []string{"https://gitlab.com/o/r", "https://github.com.evil.com/o/r", "http://github.com/o/r"} {
+		if got := githubAuthURL(u, "tok"); got != u {
+			t.Errorf("%s must not get a token, got %q", u, got)
+		}
+	}
+	if got := githubAuthURL("https://github.com/o/r", ""); got != "https://github.com/o/r" {
+		t.Errorf("empty token should be a no-op, got %q", got)
+	}
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/url"
@@ -25,7 +26,7 @@ func mirrorSyncRepo(remoteURL, pushURL string) error {
 	}
 	defer os.RemoveAll(dir)
 
-	log.Printf("gitlab sync: cloning mirror src=%s", remoteURL)
+	log.Printf("gitlab sync: cloning mirror src=%s", redactArgs([]string{remoteURL}))
 	if err := gitRun("", "clone", "--mirror", "--", remoteURL, dir); err != nil {
 		return err
 	}
@@ -94,10 +95,21 @@ func redactArgs(args []string) string {
 	return strings.Join(out, " ")
 }
 
+// gitTimeout bounds every git call so a hung push becomes a recorded sync
+// error instead of blocking that project's syncs forever.
+var gitTimeout = 15 * time.Minute
+
 func gitRun(dir string, args ...string) error {
-	cmd := exec.Command("git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
+	cmd.WaitDelay = 5 * time.Second // don't wait on pipes held open by git's children after the kill
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("git %s: timed out after %s", redactArgs(args), gitTimeout)
+	}
+	if err != nil {
 		return fmt.Errorf("git %s: %w: %s", redactArgs(args), err, strings.TrimSpace(string(out)))
 	}
 	return nil

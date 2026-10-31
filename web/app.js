@@ -335,6 +335,40 @@ function loadAccountPanel() {
                 body.appendChild(rssSection);
             }
 
+            var ghSection = document.createElement('div');
+            ghSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
+            var ghLabel = document.createElement('div');
+            ghLabel.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-bottom:0.4rem';
+            ghLabel.textContent = 'GitHub token';
+            ghSection.appendChild(ghLabel);
+            var ghInput = document.createElement('input');
+            ghInput.type = 'password';
+            ghInput.id = 'github-token-input';
+            ghInput.autocomplete = 'off';
+            ghInput.placeholder = settings.has_github_token ? 'Token saved (enter to replace)' : 'ghp_... or github_pat_...';
+            ghInput.className = 'webhook-input';
+            ghInput.style.cssText = 'width:100%;margin-bottom:0.4rem;box-sizing:border-box';
+            ghSection.appendChild(ghInput);
+            var ghHint = document.createElement('div');
+            ghHint.style.cssText = 'font-size:0.72rem;color:#8796ad;margin-bottom:0.4rem';
+            ghHint.textContent = 'Used when cloning GitHub repos for GitLab sync (private repos, rate limits). Read-only "Contents" access is enough.';
+            ghSection.appendChild(ghHint);
+            var ghSave = document.createElement('button');
+            ghSave.className = 'btn btn-primary';
+            ghSave.style.cssText = 'font-size:0.78rem;margin-right:0.4rem';
+            ghSave.textContent = 'Save';
+            ghSave.onclick = function() { saveGitHubToken(ghInput.value); };
+            ghSection.appendChild(ghSave);
+            if (settings.has_github_token) {
+                var ghClear = document.createElement('button');
+                ghClear.className = 'btn';
+                ghClear.style.cssText = 'font-size:0.78rem';
+                ghClear.textContent = 'Remove';
+                ghClear.onclick = function() { saveGitHubToken(''); };
+                ghSection.appendChild(ghClear);
+            }
+            body.appendChild(ghSection);
+
             var glSection = document.createElement('div');
             glSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
             var glLabel = document.createElement('div');
@@ -405,6 +439,7 @@ function loadAccountPanel() {
             glSection.appendChild(awesomeNameInput);
 
             body.appendChild(glSection);
+            body.appendChild(buildSyncQueueSection());
 
             var tagSection = document.createElement('div');
             tagSection.style.cssText = 'margin-top:1rem;padding-top:0.75rem;border-top:1px solid #334155';
@@ -457,6 +492,82 @@ function toggleEmailDigest(checkbox) {
         checkbox.checked = !checkbox.checked;
         toast('Failed to save settings', 'err');
     });
+}
+
+// Collapsible list of sync-enabled projects with their status and last error; loads when opened.
+function buildSyncQueueSection() {
+    var det = document.createElement('details');
+    det.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
+    var sum = document.createElement('summary');
+    sum.style.cssText = 'font-size:0.8rem;color:#8796ad;cursor:pointer';
+    sum.textContent = 'GitLab sync queue';
+    det.appendChild(sum);
+    var list = document.createElement('div');
+    list.style.marginTop = '0.5rem';
+    det.appendChild(list);
+    var colors = {running: '#60a5fa', queued: '#fbbf24', blocked: '#f87171', failed: '#f87171', ok: '#4ade80'};
+    function ago(iso) {
+        if (!iso) return 'never';
+        var d = new Date(iso);
+        return isNaN(d) ? 'never' : d.toLocaleString();
+    }
+    function load() {
+        list.textContent = 'Loading...';
+        fetch('/api/gitlab-sync-queue').then(apiJSON).then(function(items) {
+            list.textContent = '';
+            if (!items.length) {
+                list.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-top:0.5rem';
+                list.textContent = 'No projects have GitLab sync enabled.';
+                return;
+            }
+            items.forEach(function(it) {
+                var row = document.createElement('div');
+                row.style.cssText = 'padding:0.4rem 0;border-bottom:1px solid #1a2535;font-size:0.82rem';
+                var head = document.createElement('div');
+                head.style.cssText = 'display:flex;justify-content:space-between;gap:0.5rem';
+                var name = document.createElement('span');
+                name.textContent = it.name;
+                var st = document.createElement('span');
+                st.style.color = colors[it.status] || '#8796ad';
+                st.textContent = it.status;
+                head.appendChild(name);
+                head.appendChild(st);
+                row.appendChild(head);
+                var meta = document.createElement('div');
+                meta.style.cssText = 'font-size:0.72rem;color:#8796ad';
+                meta.textContent = it.frequency + ' · last ' + ago(it.last_sync_at) +
+                    (it.next_sync_at && it.status !== 'queued' ? ' · next ' + ago(it.next_sync_at) : '');
+                row.appendChild(meta);
+                if (it.last_error) {
+                    var err = document.createElement('div');
+                    err.style.cssText = 'font-size:0.75rem;color:#f87171;margin-top:0.2rem;word-break:break-word';
+                    err.textContent = it.last_error;
+                    row.appendChild(err);
+                }
+                list.appendChild(row);
+            });
+            var re = document.createElement('button');
+            re.className = 'btn';
+            re.style.cssText = 'font-size:0.75rem;margin-top:0.5rem';
+            re.textContent = 'Refresh';
+            re.onclick = load;
+            list.appendChild(re);
+        }).catch(function() { list.textContent = 'Failed to load the sync queue.'; });
+    }
+    det.addEventListener('toggle', function() { if (det.open) load(); });
+    return det;
+}
+
+function saveGitHubToken(token) {
+    fetch('/api/account-settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({github_token: token})
+    }).then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t || 'Failed to save'); });
+        toast(token ? 'GitHub token saved' : 'GitHub token removed', 'ok');
+        loadAccountPanel();
+    }).catch(function(e) { toast(e.message || 'Failed to save', 'err'); });
 }
 
 function saveGitLabSettings() {

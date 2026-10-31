@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/url"
 )
 
 // syncProjectToGitLab performs one GitLab mirror sync for t and records the
@@ -111,9 +112,20 @@ func (s *Store) doSyncProjectToGitLab(t GitLabSyncTarget) error {
 		return err
 	}
 	log.Printf("gitlab sync: starting mirror sync user=%s repo=%s src=%s dst=%s", t.UserID, t.RepoID, t.RepoURL, httpURL)
-	if err := mirrorSyncRepo(t.RepoURL, pushURL); err != nil {
+	if err := mirrorSyncRepo(githubAuthURL(t.RepoURL, s.GetGitHubToken(t.UserID)), pushURL); err != nil {
 		return err
 	}
 	log.Printf("gitlab sync: mirror sync complete user=%s repo=%s", t.UserID, t.RepoID)
 	return nil
+}
+
+// githubAuthURL embeds token in a github.com clone URL. Any other host is
+// returned untouched so the token is never sent anywhere else.
+func githubAuthURL(repoURL, token string) string {
+	u, err := url.Parse(repoURL)
+	if token == "" || err != nil || u.Scheme != "https" || u.Host != "github.com" {
+		return repoURL
+	}
+	u.User = url.UserPassword("x-access-token", token)
+	return u.String()
 }

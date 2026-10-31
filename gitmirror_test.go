@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func runGit(t *testing.T, dir string, args ...string) string {
@@ -146,5 +147,15 @@ func TestRedactArgs(t *testing.T) {
 				t.Errorf("redactArgs() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGitRunTimesOut(t *testing.T) {
+	old := gitTimeout
+	gitTimeout = 200 * time.Millisecond
+	defer func() { gitTimeout = old }()
+	err := gitRun("", "-c", "alias.hang=!sleep 10", "hang")
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("gitRun with a hanging command = %v, want a timed out error", err)
 	}
 }

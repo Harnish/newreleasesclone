@@ -1,7 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -176,5 +180,73 @@ func TestGitLabTokenInvalidFlag(t *testing.T) {
 	s.SaveGitLabSettings(userID, "https://gitlab.example.com/", "new", "") // saving a new token clears it
 	if got := s.GitLabTokenInvalidURL(userID); got != "" {
 		t.Fatalf("saving a new token left the flag: %q", got)
+	}
+}
+
+func TestGetGitLabSyncQueue(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+	mk := func(name string) string {
+		id, err := s.AddRepo(userID, Project{Name: name, Platform: "github", RepoURL: "https://github.com/o/" + name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.SetProjectGitLabSync(userID, id, true, "daily")
+		return id
+	}
+	if got, _ := s.GetGitLabSyncQueue(userID); len(got) != 0 {
+		t.Fatalf("no enabled projects: got %d items", len(got))
+	}
+	fresh, failed, run := mk("fresh"), mk("failed"), mk("run")
+	mk("due")
+	s.RecordGitLabSync(userID, fresh, nil)
+	s.RecordGitLabSync(userID, failed, errors.New("push rejected"))
+	s.gitlabSyncing.Store(userID+"/"+run, struct{}{})
+
+	// Without GitLab settings everything not running is blocked.
+	got, _ := s.GetGitLabSyncQueue(userID)
+	for _, it := range got {
+		if it.Status != "running" && it.Status != "blocked" {
+			t.Errorf("%s: status %q, want blocked without settings", it.Name, it.Status)
+		}
+	}
+
+	s.SaveGitLabSettings(userID, "https://gitlab.example.com", "tok", "")
+	got, _ = s.GetGitLabSyncQueue(userID)
+	var order []string
+	for _, it := range got {
+		order = append(order, it.Name+":"+it.Status)
+	}
+	// "due" was never synced so it is queued; "failed" and "fresh" were just synced so not due yet.
+	want := []string{"run:running", "due:queued", "failed:failed", "fresh:ok"}
+	if strings.Join(order, ",") != strings.Join(want, ",") {
+		t.Fatalf("queue order = %v, want %v", order, want)
+	}
+	if got[2].LastError != "push rejected" {
+		t.Errorf("last error = %q", got[2].LastError)
+	}
+}
+
+func TestHandleGitLabSyncQueue(t *testing.T) {
+	s := newTestStore(t)
+	oldStore := store
+	store = s
+	defer func() { store = oldStore }()
+	_, cookie := newTestAuth(t, s)
+
+	req, _ := http.NewRequest("GET", "/api/gitlab-sync-queue", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	requireAuth(handleGitLabSyncQueue)(w, req)
+	if w.Code != 200 || strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Fatalf("empty queue: code=%d body=%q, want 200 and []", w.Code, w.Body.String())
+	}
+
+	req, _ = http.NewRequest("POST", "/api/gitlab-sync-queue", nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	requireAuth(handleGitLabSyncQueue)(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST: code=%d, want 405", w.Code)
 	}
 }

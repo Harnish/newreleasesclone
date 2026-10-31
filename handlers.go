@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -617,6 +618,24 @@ func handleProjectGitLabSync(w http.ResponseWriter, r *http.Request, userID stri
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
+// GET /api/gitlab-sync-queue — the user's sync-enabled projects with status and last error.
+func handleGitLabSyncQueue(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	items, err := store.GetGitLabSyncQueue(userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if items == nil {
+		items = []SyncQueueItem{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}
+
 // POST /api/project-gitlab-sync/sync-now — manually trigger a sync for an already-enabled project.
 func handleProjectGitLabSyncNow(w http.ResponseWriter, r *http.Request, userID string) {
 	if r.Method != http.MethodPost {
@@ -847,12 +866,15 @@ func handleAccountSettings(w http.ResponseWriter, r *http.Request, userID string
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"email_digest": enabled,
 			"page_size":    user.PageSize,
+			// The token itself is never sent back.
+			"has_github_token": store.GetGitHubToken(userID) != "",
 		})
 
 	case http.MethodPost:
 		var req struct {
-			EmailDigest *bool `json:"email_digest"`
-			PageSize    *int  `json:"page_size"`
+			EmailDigest *bool   `json:"email_digest"`
+			PageSize    *int    `json:"page_size"`
+			GitHubToken *string `json:"github_token"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -870,9 +892,23 @@ func handleAccountSettings(w http.ResponseWriter, r *http.Request, userID string
 				return
 			}
 		}
+		if req.GitHubToken != nil {
+			tok := strings.TrimSpace(*req.GitHubToken)
+			if tok != "" && !githubTokenRE.MatchString(tok) {
+				http.Error(w, "invalid github token", http.StatusBadRequest)
+				return
+			}
+			if err := store.SetGitHubToken(userID, tok); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
+// Classic (ghp_...) and fine-grained (github_pat_...) tokens are word characters only.
+var githubTokenRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,255}$`)
