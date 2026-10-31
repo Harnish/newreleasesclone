@@ -741,8 +741,8 @@ func (s *Store) SetEmailDigest(userID string, enabled bool) error {
 }
 
 func (s *Store) SetPageSize(userID string, size int) error {
-	if size != 5 && size != 10 && size != 20 {
-		return fmt.Errorf("invalid page_size %d: must be 5, 10, or 20", size)
+	if size != 10 && size != 20 && size != 50 {
+		return fmt.Errorf("invalid page_size %d: must be 10, 20, or 50", size)
 	}
 	_, err := s.db.Exec("UPDATE users SET page_size = ? WHERE id = ?", size, userID)
 	return err

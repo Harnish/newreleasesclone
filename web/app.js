@@ -109,7 +109,7 @@ var currentUser = null;
 var allProjects = [];
 var allReleases = [];
 var currentPage = 1;
-var pageSize = parseInt(localStorage.getItem('page_size'), 10) || 10;
+var pageSize = [10, 20, 50].indexOf(parseInt(localStorage.getItem('page_size'), 10)) !== -1 ? parseInt(localStorage.getItem('page_size'), 10) : 10;
 var SORT_MODES = ['latest', 'added', 'name'];
 var UNTAGGED = '__untagged__';
 var tagFilter = (function() { try { return localStorage.getItem('tag_filter') || ''; } catch (e) { return ''; } })();
@@ -126,7 +126,7 @@ function showApp() {
     updateGitLabTokenBanner();
     fetch('/api/refresh-check').catch(function() {});
     initNotifications();
-    if (currentUser.page_size && [5, 10, 20].indexOf(currentUser.page_size) !== -1) {
+    if (currentUser.page_size && [10, 20, 50].indexOf(currentUser.page_size) !== -1) {
         pageSize = currentUser.page_size;
         localStorage.setItem('page_size', String(pageSize));
     }

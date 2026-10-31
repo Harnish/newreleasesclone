@@ -13,7 +13,7 @@ func TestSetPageSize(t *testing.T) {
 	userID, _ := newTestAuth(t, s)
 
 	// valid sizes
-	for _, size := range []int{5, 10, 20} {
+	for _, size := range []int{10, 20, 50} {
 		if err := s.SetPageSize(userID, size); err != nil {
 			t.Fatalf("SetPageSize(%d): %v", size, err)
 		}
@@ -175,7 +175,7 @@ func TestHandleAccountSettingsPageSizePOST(t *testing.T) {
 
 	userID, cookie := newTestAuth(t, store)
 
-	body := `{"page_size":5}`
+	body := `{"page_size":50}`
 	req, _ := http.NewRequest("POST", "/api/account-settings", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(cookie)
@@ -189,8 +189,8 @@ func TestHandleAccountSettingsPageSizePOST(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUserByID: %v", err)
 	}
-	if user.PageSize != 5 {
-		t.Errorf("expected page_size 5, got %d", user.PageSize)
+	if user.PageSize != 50 {
+		t.Errorf("expected page_size 50, got %d", user.PageSize)
 	}
 }
 

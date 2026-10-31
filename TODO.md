@@ -38,7 +38,7 @@
 - [x] **Immediate email on new release** — plain-text email sent the moment a new release is detected (opt-in per project per user, gated on SMTP configured + verified email); toggle in the project settings panel alongside push notifications
 - [x] **GitLab backup badge on Releases tab** — the `[BACKUP]` link to the mirrored GitLab project (already shown on Projects-tab cards) now also shows on the Releases-tab project header, for consistency across both views
 - [x] **Incorporate syncrepos project** — per-user GitLab instance URL + API token (Account Settings panel); per-project "Enable GitLab sync" with daily/weekly/monthly frequency (project settings panel), ported GitLab REST client + ephemeral mirror clone/push from `syncrepos`; optional auto-generated "Awesome" README (grouped by platform) pushed to a GitLab project under the user's namespace, implementing syncrepos's own unfinished TODO item
-- [x] **Pagenate releases and projects** - Allow the user to set the number of projects per page between 5,10 and 20.  Pagenate beyond that number.
+- [x] **Pagenate releases and projects** - Allow the user to set the number of projects per page between 10, 20 and 50.  Pagenate beyond that number.
 - [x] **User accounts with auth** — register/login/logout, session cookies, per-user project tracking
 - [x] **Shared release data** — deduplicated repos table; two users adding the same project share one release record
 - [x] **Smart URL autofill** — platform-aware input: `owner/repo` for GitHub/GitLab, package name for npm/PyPI, image name for Docker; auto-fills display name
