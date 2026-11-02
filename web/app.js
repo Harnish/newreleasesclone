@@ -664,7 +664,7 @@ function iconFallback(img) {
 }
 
 function buildReleasesHTML(releases, projects) {
-    if (!releases || releases.length === 0) {
+    if ((!releases || releases.length === 0) && !(projects && projects.length)) {
         return '<div class="empty"><h3>No releases yet</h3><p>Add projects to start tracking.</p></div>';
     }
     var projMap = {};
@@ -676,8 +676,8 @@ function buildReleasesHTML(releases, projects) {
         (groups[pid] = groups[pid] || []).push(r);
     });
     // Follow the (sorted) project order; any release whose project is unknown goes last.
-    var order = (projects || []).map(function(p) { return p.id; })
-        .filter(function(id) { return groups[id]; });
+    // Projects with no (visible) releases still get a card, else whole pages go blank.
+    var order = (projects || []).map(function(p) { return p.id; });
     Object.keys(groups).forEach(function(id) { if (order.indexOf(id) === -1) order.push(id); });
 
     return order.map(function(pid) {
@@ -687,7 +687,7 @@ function buildReleasesHTML(releases, projects) {
         var backupUrl = proj && proj.gitlab_project_path ? proj.gitlab_project_path.replace(/\.git$/, '') : '';
         var backupLink = (proj && proj.gitlab_sync_enabled && /^https?:\/\//i.test(backupUrl)) ?
             '<a href="' + esc(backupUrl) + '" target="_blank" rel="noopener noreferrer" class="badge">[BACKUP]</a>' : '';
-        var rels = groups[pid];
+        var rels = groups[pid] || [];
 
         var visible = rels.slice(0, 5);
         var hidden  = rels.slice(5);
@@ -923,7 +923,7 @@ function goToPage(n) {
 
 function onPageSizeChange(val) {
     var n = parseInt(val, 10);
-    if (n !== 5 && n !== 10 && n !== 20) return;
+    if (n !== 10 && n !== 20 && n !== 50) return;
     pageSize = n;
     currentPage = 1;
     localStorage.setItem('page_size', String(n));
