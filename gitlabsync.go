@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"path/filepath"
 )
 
 // syncProjectToGitLab performs one GitLab mirror sync for t and records the
@@ -112,7 +113,7 @@ func (s *Store) doSyncProjectToGitLab(t GitLabSyncTarget) error {
 		return err
 	}
 	log.Printf("gitlab sync: starting mirror sync user=%s repo=%s src=%s dst=%s", t.UserID, t.RepoID, t.RepoURL, httpURL)
-	if err := mirrorSyncRepo(githubAuthURL(t.RepoURL, s.GetGitHubToken(t.UserID)), pushURL); err != nil {
+	if err := mirrorSyncRepo(filepath.Join(mirrorCacheDir, t.UserID+"_"+t.RepoID+".git"), githubAuthURL(t.RepoURL, s.GetGitHubToken(t.UserID)), pushURL); err != nil {
 		return err
 	}
 	log.Printf("gitlab sync: mirror sync complete user=%s repo=%s", t.UserID, t.RepoID)

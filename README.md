@@ -136,7 +136,7 @@ Uses a `local-path` PVC to persist `data/` across pod restarts.
 | `ui.go` | `go:embed` wiring + `/static/` handler for the frontend |
 | `web/` | Frontend source: `index.html`, `app.css`, `app.js` (embedded into the binary) |
 | `gitlabclient.go` | GitLab REST v4 client (project create/lookup, authenticated push URL) |
-| `gitmirror.go` | Ephemeral `git clone --mirror` / push primitives (`os/exec`, no persistent clone dir) |
+| `gitmirror.go` | Cached bare mirror (`data/mirrors/<user>_<repo>.git`, incremental `git fetch --prune`, rebuilt if it won't update) + `push --mirror` primitives (`os/exec`) |
 | `gitlabsync.go` | Per-project sync orchestration |
 | `awesome.go` | Awesome-page README generation, grouped by platform |
 

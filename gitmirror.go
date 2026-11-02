@@ -12,30 +12,58 @@ import (
 	"time"
 )
 
-// mirrorSyncRepo does a full ephemeral mirror sync: bare mirror-clone
-// remoteURL to a temp dir, push --mirror to pushURL, then remove the temp
-// dir. Every sync transfers the full repo; there is no incremental fetch
-// and no state carried between syncs.
-// ponytail: no persistent REPOS_DIR (unlike syncrepos) — sync cadence here
-// is daily/weekly/monthly, so re-cloning each time costs nothing that
-// matters and avoids the drift/repair problem persistent clones create.
-func mirrorSyncRepo(remoteURL, pushURL string) error {
-	dir, err := os.MkdirTemp("", "glsync-*")
-	if err != nil {
-		return fmt.Errorf("create temp dir: %w", err)
-	}
-	defer os.RemoveAll(dir)
+// mirrorCacheDir holds one bare mirror per (user, project) so a sync only
+// fetches what changed. Lives under data/ so it survives container restarts.
+var mirrorCacheDir = "data/mirrors"
 
-	log.Printf("gitlab sync: cloning mirror src=%s", redactArgs([]string{remoteURL}))
-	if err := gitRun("", "clone", "--mirror", "--", remoteURL, dir); err != nil {
+// mirrorSyncRepo updates the bare mirror at cacheDir from remoteURL (fetching
+// only new objects after the first run), then push --mirror to pushURL. The
+// remote URL is passed per call and never saved in the repo's config, so a
+// token never lands on disk and a rotated token just works. If an existing
+// cache fails to update (corrupt, force-pushed history git won't reconcile),
+// it is deleted and rebuilt once from scratch.
+func mirrorSyncRepo(cacheDir, remoteURL, pushURL string) error {
+	_, statErr := os.Stat(cacheDir)
+	existed := statErr == nil
+	err := mirrorFetch(cacheDir, remoteURL)
+	if err != nil && existed {
+		log.Printf("gitlab sync: cache refresh failed, re-cloning dir=%s err=%v", cacheDir, err)
+		if rmErr := os.RemoveAll(cacheDir); rmErr != nil {
+			return fmt.Errorf("reset mirror cache: %w", rmErr)
+		}
+		err = mirrorFetch(cacheDir, remoteURL)
+	}
+	if err != nil {
 		return err
 	}
 	log.Printf("gitlab sync: pushing mirror dst=%s", redactArgs([]string{pushURL}))
-	if err := gitRun(dir, "push", "--mirror", "--", pushURL); err != nil {
+	if err := gitRun(cacheDir, "push", "--mirror", "--", pushURL); err != nil {
 		return err
 	}
 	log.Printf("gitlab sync: push complete dst=%s", redactArgs([]string{pushURL}))
 	return nil
+}
+
+// mirrorFetch makes cacheDir a bare repo (if it isn't one) and force-fetches
+// every ref from remoteURL into it, pruning refs deleted upstream. A failed
+// first fetch removes the half-made dir so it isn't mistaken for a cache.
+func mirrorFetch(cacheDir, remoteURL string) error {
+	fresh := false
+	if _, err := os.Stat(filepath.Join(cacheDir, "HEAD")); err != nil {
+		if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+			return fmt.Errorf("create mirror cache: %w", err)
+		}
+		if err := gitRun(cacheDir, "init", "--bare"); err != nil {
+			return err
+		}
+		fresh = true
+	}
+	log.Printf("gitlab sync: fetching mirror src=%s fresh=%v", redactArgs([]string{remoteURL}), fresh)
+	err := gitRun(cacheDir, "fetch", "--prune", "--no-tags", "--", remoteURL, "+refs/*:refs/*")
+	if err != nil && fresh {
+		os.RemoveAll(cacheDir)
+	}
+	return err
 }
 
 // pushGeneratedContent commits files (path -> content) into a fresh repo

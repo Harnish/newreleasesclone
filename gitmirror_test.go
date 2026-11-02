@@ -42,10 +42,11 @@ func makeBareRepo(t *testing.T) (dir, url string) {
 }
 
 func TestMirrorSyncRepo(t *testing.T) {
+	cache := t.TempDir()
 	_, originURL := makeOriginRepo(t)
 	bareDir, bareURL := makeBareRepo(t)
 
-	if err := mirrorSyncRepo(originURL, bareURL); err != nil {
+	if err := mirrorSyncRepo(cache, originURL, bareURL); err != nil {
 		t.Fatalf("mirrorSyncRepo() error = %v", err)
 	}
 
@@ -56,10 +57,11 @@ func TestMirrorSyncRepo(t *testing.T) {
 }
 
 func TestMirrorSyncRepoAdvancesOnSecondSync(t *testing.T) {
+	cache := t.TempDir()
 	originDir, originURL := makeOriginRepo(t)
 	bareDir, bareURL := makeBareRepo(t)
 
-	if err := mirrorSyncRepo(originURL, bareURL); err != nil {
+	if err := mirrorSyncRepo(cache, originURL, bareURL); err != nil {
 		t.Fatalf("first mirrorSyncRepo() error = %v", err)
 	}
 
@@ -71,7 +73,7 @@ func TestMirrorSyncRepoAdvancesOnSecondSync(t *testing.T) {
 	runGit(t, originDir, "tag", "v1.0.0")
 	wantSHA := strings.TrimSpace(runGit(t, originDir, "rev-parse", "refs/heads/main"))
 
-	if err := mirrorSyncRepo(originURL, bareURL); err != nil {
+	if err := mirrorSyncRepo(cache, originURL, bareURL); err != nil {
 		t.Fatalf("second mirrorSyncRepo() error = %v", err)
 	}
 
@@ -88,7 +90,7 @@ func TestMirrorSyncRepoRedactsCredentials(t *testing.T) {
 	_, originURL := makeOriginRepo(t)
 	badPushURL := "https://oauth2:s3cr3t-token@127.0.0.1:1/nonexistent.git"
 
-	err := mirrorSyncRepo(originURL, badPushURL)
+	err := mirrorSyncRepo(t.TempDir(), originURL, badPushURL)
 	if err == nil {
 		t.Fatal("mirrorSyncRepo() error = nil, want failure pushing to an unreachable host")
 	}
@@ -157,5 +159,42 @@ func TestGitRunTimesOut(t *testing.T) {
 	err := gitRun("", "-c", "alias.hang=!sleep 10", "hang")
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("gitRun with a hanging command = %v, want a timed out error", err)
+	}
+}
+
+func TestMirrorSyncRepoReusesAndRepairsCache(t *testing.T) {
+	originDir, originURL := makeOriginRepo(t)
+	bareDir, bareURL := makeBareRepo(t)
+	cache := filepath.Join(t.TempDir(), "m.git")
+
+	if err := mirrorSyncRepo(cache, originURL, bareURL); err != nil {
+		t.Fatalf("first sync: %v", err)
+	}
+	// Marker survives only if the cache is reused rather than re-cloned.
+	marker := filepath.Join(cache, "marker")
+	if err := os.WriteFile(marker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, originDir, "commit", "--allow-empty", "-m", "second")
+	if err := mirrorSyncRepo(cache, originURL, bareURL); err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Error("cache was re-cloned on second sync, want incremental fetch")
+	}
+	want := strings.TrimSpace(runGit(t, originDir, "rev-parse", "main"))
+	if got := strings.TrimSpace(runGit(t, bareDir, "rev-parse", "main")); got != want {
+		t.Errorf("target main = %q, want %q", got, want)
+	}
+	if cfg := runGit(t, cache, "config", "--list"); strings.Contains(cfg, originURL) {
+		t.Error("remote URL was saved in the cache config")
+	}
+
+	// Corrupt cache: HEAD exists but objects are gone -> rebuilt, sync still succeeds.
+	if err := os.RemoveAll(filepath.Join(cache, "objects")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mirrorSyncRepo(cache, originURL, bareURL); err != nil {
+		t.Fatalf("sync after corrupting cache: %v", err)
 	}
 }
