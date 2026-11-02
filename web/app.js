@@ -693,6 +693,16 @@ function platformBadge(platform, repoURL) {
     return '<a class="' + cls + '" href="' + esc(repoURL) + '" target="_blank" rel="noopener noreferrer" title="Open on ' + esc(platform) + '">' + esc(platform) + '</a>';
 }
 
+// "[BACKUP]" link to the GitLab mirror, plus when the last backup that worked finished.
+function backupBadge(p) {
+    var url = p && p.gitlab_project_path ? p.gitlab_project_path.replace(/\.git$/, '') : '';
+    if (!(p && p.gitlab_sync_enabled && /^https?:\/\//i.test(url))) return '';
+    var t = Date.parse(p.last_gitlab_success_at);
+    var when = t > 0 ? new Date(t).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'}) : 'no successful backup yet';
+    return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" class="badge">[BACKUP]</a>' +
+        '<span class="backup-when" title="Last successful backup">' + esc(when) + '</span>';
+}
+
 function buildReleasesHTML(releases, projects) {
     if ((!releases || releases.length === 0) && !(projects && projects.length)) {
         return '<div class="empty"><h3>No releases yet</h3><p>Add projects to start tracking.</p></div>';
@@ -714,9 +724,7 @@ function buildReleasesHTML(releases, projects) {
         var proj = projMap[pid];
         var pname = proj ? proj.name : 'Unknown';
         var platform = proj ? proj.platform : '';
-        var backupUrl = proj && proj.gitlab_project_path ? proj.gitlab_project_path.replace(/\.git$/, '') : '';
-        var backupLink = (proj && proj.gitlab_sync_enabled && /^https?:\/\//i.test(backupUrl)) ?
-            '<a href="' + esc(backupUrl) + '" target="_blank" rel="noopener noreferrer" class="badge">[BACKUP]</a>' : '';
+        var backupLink = backupBadge(proj);
         var rels = groups[pid] || [];
 
         var visible = rels.slice(0, 5);
@@ -1257,9 +1265,7 @@ function buildProjectsHTML(projects) {
     }
     return projects.map(function(p) {
         var sub = p.last_refresh ? 'Refreshed ' + fmtAge(p.last_refresh) : 'Never refreshed';
-        var backupUrl = p.gitlab_project_path ? p.gitlab_project_path.replace(/\.git$/, '') : '';
-        var backupLink = (p.gitlab_sync_enabled && /^https?:\/\//i.test(backupUrl)) ?
-            '<a href="' + esc(backupUrl) + '" target="_blank" rel="noopener noreferrer" class="badge">[BACKUP]</a>' : '';
+        var backupLink = backupBadge(p);
         return '<div class="card" id="projcard-' + esc(p.id) + '">' +
             '<div class="proj-row">' +
                 '<div class="proj-card-info">' +

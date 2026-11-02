@@ -13,6 +13,7 @@
 
 ## Done
 
+- [x] **Last successful backup time** — the `[BACKUP]` link on each project now has the date/time of the last backup that worked next to it ("no successful backup yet" until one does). Stored separately from the last attempt (`user_repos.last_gitlab_success_at`, migration 20, backfilled from existing clean syncs) so a later failure doesn't overwrite it
 - [x] **README screenshots** — project list, project popup and account settings in `docs/screenshots/`, taken from a throwaway local instance with demo data (no real projects or tokens)
 - [x] **No duplicate projects** — adding a project you already track now fails with a 409 "You are already tracking <name>." (before, it silently succeeded and re-triggered a refresh). Matching ignores trailing `/` and `.git`, and case for GitHub, GitLab, PyPI and Docker only (npm has packages differing only by case; Helm paths can be case-sensitive); the add form shows the message as-is
 - [x] **README API table** — the two halves of the endpoint table had lost the second header and rendered as plain text; merged into one table and added the missing endpoints (resend-verification, account-settings, project-tags, tags, icon)

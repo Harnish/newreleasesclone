@@ -46,6 +46,7 @@ type Project struct {
 	GitLabSyncEnabled   bool      `json:"gitlab_sync_enabled"`
 	GitLabSyncFrequency string    `json:"gitlab_sync_frequency,omitempty"`
 	LastGitLabSyncAt    time.Time `json:"last_gitlab_sync_at,omitempty"`
+	LastGitLabSuccessAt time.Time `json:"last_gitlab_success_at"` // last backup that worked; zero = never
 	LastGitLabSyncError string    `json:"last_gitlab_sync_error,omitempty"`
 	GitLabProjectPath   string    `json:"gitlab_project_path,omitempty"`
 }

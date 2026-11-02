@@ -195,6 +195,11 @@ var migrations = []migration{
 		// Optional per-user GitHub token, used when mirroring GitHub repos to GitLab (private repos, rate limits).
 		`ALTER TABLE users ADD COLUMN github_token TEXT NOT NULL DEFAULT ''`,
 	}},
+	{version: 20, stmts: []string{
+		// last_gitlab_sync_at is the last attempt; this is the last one that worked.
+		`ALTER TABLE user_repos ADD COLUMN last_gitlab_success_at TEXT NOT NULL DEFAULT ''`,
+		`UPDATE user_repos SET last_gitlab_success_at = last_gitlab_sync_at WHERE last_gitlab_sync_error = ''`,
+	}},
 }
 
 func migrate(db *sql.DB) error { return runMigrations(db, migrations) }

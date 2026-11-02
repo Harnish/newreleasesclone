@@ -254,3 +254,33 @@ func TestHandleGitLabSyncQueue(t *testing.T) {
 		t.Fatalf("POST: code=%d, want 405", w.Code)
 	}
 }
+
+func TestLastGitLabSuccessSurvivesFailures(t *testing.T) {
+	s := newTestStore(t)
+	userID, _ := newTestAuth(t, s)
+	id, err := s.AddRepo(userID, Project{Name: "r", Platform: "github", RepoURL: "https://github.com/o/r"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func() Project { return s.GetUserRepos(userID)[0] }
+	if !get().LastGitLabSuccessAt.IsZero() {
+		t.Fatal("never synced: success time should be zero")
+	}
+	s.RecordGitLabSync(userID, id, errors.New("boom"))
+	if !get().LastGitLabSuccessAt.IsZero() {
+		t.Error("a failed sync must not set the success time")
+	}
+	s.RecordGitLabSync(userID, id, nil)
+	ok := get().LastGitLabSuccessAt
+	if ok.IsZero() {
+		t.Fatal("successful sync did not set the success time")
+	}
+	s.RecordGitLabSync(userID, id, errors.New("boom again"))
+	p := get()
+	if !p.LastGitLabSuccessAt.Equal(ok) {
+		t.Errorf("failure changed success time: %v -> %v", ok, p.LastGitLabSuccessAt)
+	}
+	if p.LastGitLabSyncError == "" {
+		t.Error("failure should still record the error")
+	}
+}

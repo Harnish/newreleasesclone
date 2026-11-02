@@ -431,11 +431,13 @@ func (s *Store) RecordGitLabSync(userID, repoID string, syncErr error) error {
 			errMsg = errMsg[:4000] + "… (truncated)"
 		}
 	}
+	now := time.Now().Format(time.RFC3339)
 	_, err := s.db.Exec(`
 		UPDATE user_repos
-		SET last_gitlab_sync_at = ?, last_gitlab_sync_error = ?
+		SET last_gitlab_sync_at = ?, last_gitlab_sync_error = ?,
+		    last_gitlab_success_at = CASE WHEN ? = '' THEN ? ELSE last_gitlab_success_at END
 		WHERE user_id = ? AND repo_id = ?`,
-		time.Now().Format(time.RFC3339), errMsg, userID, repoID)
+		now, errMsg, errMsg, now, userID, repoID)
 	if syncErr == nil {
 		s.db.Exec("UPDATE gitlab_settings SET token_invalid = 0 WHERE user_id = ?", userID) // it worked, so the token is fine
 	} else {
@@ -947,7 +949,7 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		SELECT r.id, r.name, r.platform, r.repo_url, r.last_refresh, r.refresh_count, ur.push_enabled,
 		       ur.email_immediate, ur.include_prereleases,
 		       ur.gitlab_sync_enabled, ur.gitlab_sync_frequency, ur.last_gitlab_sync_at, ur.last_gitlab_sync_error,
-		       ur.gitlab_project_path, r.description,
+		       ur.last_gitlab_success_at, ur.gitlab_project_path, r.description,
 		       CASE WHEN length(ri.data) > 0 THEN ri.fetched_at ELSE 0 END
 		FROM repos r
 		INNER JOIN user_repos ur ON ur.repo_id = r.id
@@ -962,12 +964,12 @@ func (s *Store) GetUserRepos(userID string) []Project {
 	projects := []Project{}
 	for rows.Next() {
 		var p Project
-		var lastRefresh, lastGitLabSync string
+		var lastRefresh, lastGitLabSync, lastGitLabSuccess string
 		var pushEnabled, emailImmediate, includePre, gitlabSyncEnabled int
 		if err := rows.Scan(&p.ID, &p.Name, &p.Platform, &p.RepoURL, &lastRefresh, &p.RefreshCount, &pushEnabled,
 			&emailImmediate, &includePre,
 			&gitlabSyncEnabled, &p.GitLabSyncFrequency, &lastGitLabSync, &p.LastGitLabSyncError,
-			&p.GitLabProjectPath, &p.Description, &p.IconVersion); err != nil {
+			&lastGitLabSuccess, &p.GitLabProjectPath, &p.Description, &p.IconVersion); err != nil {
 			log.Printf("⚠ Failed to scan project: %v", err)
 			continue
 		}
@@ -976,6 +978,9 @@ func (s *Store) GetUserRepos(userID string) []Project {
 		}
 		if lastGitLabSync != "" {
 			p.LastGitLabSyncAt, _ = time.Parse(time.RFC3339, lastGitLabSync)
+		}
+		if lastGitLabSuccess != "" {
+			p.LastGitLabSuccessAt, _ = time.Parse(time.RFC3339, lastGitLabSuccess)
 		}
 		p.PushEnabled = pushEnabled != 0
 		p.EmailImmediate = emailImmediate != 0
