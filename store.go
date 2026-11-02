@@ -880,16 +880,20 @@ func (s *Store) DeleteVerificationTokensForUser(userID string) error {
 // errAlreadyTracked is returned by AddRepo when the user already tracks the repo.
 var errAlreadyTracked = errors.New("you are already tracking this project")
 
+// caseInsensitivePlatforms lists platforms whose identifiers ignore case, so
+// two spellings are the same upstream project. Everything else (npm has legacy
+// packages differing only by case, Helm paths can be case-sensitive) matches exactly.
+var caseInsensitivePlatforms = map[string]bool{"github": true, "gitlab": true, "pypi": true, "docker": true}
+
 // AddRepo links userID to the shared repo record, creating it if needed.
 // Returns errAlreadyTracked if the user already has it. URLs compare
-// case-insensitively (GitHub, npm, PyPI... ignore case) except helm-repo,
-// where the path may be case-sensitive.
+// case-insensitively only for caseInsensitivePlatforms.
 func (s *Store) AddRepo(userID string, p Project) (string, error) {
 	normURL := normalizeURL(p.RepoURL)
 
 	var repoID string
 	match := "repo_url = ?"
-	if p.Platform != "helm-repo" {
+	if caseInsensitivePlatforms[p.Platform] {
 		match = "lower(repo_url) = lower(?)"
 	}
 	err := s.db.QueryRow(

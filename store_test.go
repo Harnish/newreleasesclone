@@ -516,3 +516,16 @@ func TestStoreAddRepoRejectsDuplicateForSameUser(t *testing.T) {
 		t.Errorf("user has %d repos, want 1", n)
 	}
 }
+
+func TestStoreAddRepoNPMCaseSensitive(t *testing.T) {
+	s := newTestStore(t)
+	u, _ := s.CreateUser("npmcase@example.com", "password123")
+	a, err := s.AddRepo(u.ID, Project{Name: "JSONStream", Platform: "npm", RepoURL: "https://www.npmjs.com/package/JSONStream"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.AddRepo(u.ID, Project{Name: "jsonstream", Platform: "npm", RepoURL: "https://www.npmjs.com/package/jsonstream"})
+	if err != nil || a == b {
+		t.Errorf("npm packages differing by case must stay separate: %q %q %v", a, b, err)
+	}
+}
