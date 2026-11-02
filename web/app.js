@@ -222,7 +222,7 @@ function openProjectDetail(id) {
     }).join('') || '<p class="detail-empty">No versions yet.</p>';
     document.getElementById('detail-body').innerHTML =
         '<div class="add-panel-title"><span>' + projIconHTML(proj, proj.name || '', proj.platform || '') + ' ' + esc(proj.name || '') +
-        (proj.platform ? ' <span class="badge ' + esc(proj.platform) + '">' + esc(proj.platform) + '</span>' : '') + '</span>' +
+        (proj.platform ? ' ' + platformBadge(proj.platform, proj.repo_url) : '') + '</span>' +
         '<button class="btn btn-ghost" aria-label="Close" onclick="document.getElementById(\'detail-dialog\').close()">&#x2715;</button></div>' +
         (proj.description ? '<p class="detail-desc">' + esc(proj.description) + '</p>' : '') +
         '<div class="settings-section-title">Last ' + rels.length + ' version' + (rels.length === 1 ? '' : 's') + '</div>' + rows;
@@ -685,6 +685,14 @@ function iconFallback(img) {
     img.replaceWith(span);
 }
 
+// Platform badge; links to the project's page on that platform when its repo_url is a web URL.
+function platformBadge(platform, repoURL) {
+    if (!platform) return '';
+    var cls = 'badge ' + esc(platform);
+    if (!/^https?:\/\//i.test(repoURL || '')) return '<span class="' + cls + '">' + esc(platform) + '</span>';
+    return '<a class="' + cls + '" href="' + esc(repoURL) + '" target="_blank" rel="noopener noreferrer" title="Open on ' + esc(platform) + '">' + esc(platform) + '</a>';
+}
+
 function buildReleasesHTML(releases, projects) {
     if ((!releases || releases.length === 0) && !(projects && projects.length)) {
         return '<div class="empty"><h3>No releases yet</h3><p>Add projects to start tracking.</p></div>';
@@ -747,7 +755,7 @@ function buildReleasesHTML(releases, projects) {
                 '<div class="proj-header-left">' +
                     projIconHTML(proj, pname, platform) +
                     '<button class="proj-name proj-name-btn" title="Show versions" data-id="' + esc(pid) + '" onclick="openProjectDetail(this.dataset.id)">' + esc(pname) + '</button>' +
-                    (platform ? '<span class="badge ' + esc(platform) + '">' + esc(platform) + '</span>' : '') +
+                    platformBadge(platform, proj && proj.repo_url) +
                     backupLink +
                     ((proj && proj.tags) || []).map(function(t) { return '<span class="tag-label">' + esc(t) + '</span>'; }).join('') +
                 '</div>' +
@@ -1257,7 +1265,7 @@ function buildProjectsHTML(projects) {
                 '<div class="proj-card-info">' +
                     '<div class="proj-card-name">' + esc(p.name) + '</div>' +
                     '<div class="proj-card-meta">' +
-                        '<span class="badge ' + esc(p.platform) + '">' + esc(p.platform) + '</span>' +
+                        platformBadge(p.platform, p.repo_url) +
                         backupLink +
                         '<span style="color:#8796ad;font-size:0.75rem">' + sub + '</span>' +
                     '</div>' +

@@ -13,6 +13,7 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 - **Project icons**: GitHub owner avatars, GitLab project avatars, Artifact Hub logos and Helm chart icons appear next to project names; npm, PyPI and Docker projects get a letter badge. Icons are downloaded and cached by the server (re-checked weekly) and served from `/api/icon`, so your browser never contacts GitHub or other third parties for them
 - **Sorting**: Order projects by latest release (default), date added, or name; the choice is remembered in your browser and applies across pages
 - **Pagination**: 10, 20 or 50 projects per page; projects with no visible releases yet still get a card
+- **Platform links**: the platform badge (GITHUB, NPM, …) next to a project name opens the project on that platform
 - **Smart add form**: Platform-aware input (e.g. `owner/repo` for GitHub, package name for npm); "Other" option auto-detects platform from any pasted URL
 - **Browser push notifications**: Click 🔔 in the header to subscribe; notifications fire when a new release is detected on any tracked repo
 - **Email notifications**: Opt-in per project — a daily digest of the previous day's releases, and/or an immediate plain-text email the moment a new release is detected (requires SMTP configured and a verified email)
