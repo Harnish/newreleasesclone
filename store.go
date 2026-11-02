@@ -426,6 +426,9 @@ func (s *Store) RecordGitLabSync(userID, repoID string, syncErr error) error {
 	errMsg := ""
 	if syncErr != nil {
 		errMsg = syncErr.Error()
+		if len(errMsg) > 4000 { // git output can be enormous
+			errMsg = errMsg[:4000] + "… (truncated)"
+		}
 	}
 	_, err := s.db.Exec(`
 		UPDATE user_repos

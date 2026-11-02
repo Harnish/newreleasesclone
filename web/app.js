@@ -494,6 +494,21 @@ function toggleEmailDigest(checkbox) {
     });
 }
 
+// One-line plain-English reason for a (possibly huge) sync error; the raw text stays in the expandable body.
+function syncErrorSummary(msg) {
+    var known = [
+        [/Authentication failed|HTTP Basic: Access denied|401/i, 'GitLab rejected the token. Save a new one in Account settings.'],
+        [/timed out/i, 'Sync timed out. It will retry on the next run.'],
+        [/has already been taken/i, 'A GitLab project with this name already exists and could not be adopted.'],
+        [/403|forbidden|insufficient_scope/i, 'GitLab denied access. Check the token scope (api) and project permissions.'],
+        [/404|not found/i, 'GitLab project or source repo not found.'],
+        [/no such host|connection refused|i\/o timeout|dial tcp/i, 'Could not reach GitLab or the source host.']
+    ];
+    for (var i = 0; i < known.length; i++) if (known[i][0].test(msg)) return known[i][1];
+    var line = msg.split('\n').filter(function(l) { return l.trim(); })[0] || msg;
+    return line.length > 140 ? line.slice(0, 140) + '\u2026' : line;
+}
+
 // Collapsible list of sync-enabled projects with their status and last error; loads when opened.
 function buildSyncQueueSection() {
     var det = document.createElement('details');
@@ -539,9 +554,16 @@ function buildSyncQueueSection() {
                     (it.next_sync_at && it.status !== 'queued' ? ' · next ' + ago(it.next_sync_at) : '');
                 row.appendChild(meta);
                 if (it.last_error) {
-                    var err = document.createElement('div');
+                    var err = document.createElement('details');
                     err.style.cssText = 'font-size:0.75rem;color:#f87171;margin-top:0.2rem;word-break:break-word';
-                    err.textContent = it.last_error;
+                    var es = document.createElement('summary');
+                    es.style.cursor = 'pointer';
+                    es.textContent = syncErrorSummary(it.last_error);
+                    var raw = document.createElement('pre');
+                    raw.style.cssText = 'white-space:pre-wrap;max-height:10rem;overflow:auto;margin:0.3rem 0 0;font:inherit;color:#8796ad';
+                    raw.textContent = it.last_error;
+                    err.appendChild(es);
+                    err.appendChild(raw);
                     row.appendChild(err);
                 }
                 list.appendChild(row);
