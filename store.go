@@ -1296,6 +1296,9 @@ func (s *Store) GetGitLabSyncQueue(userID string) ([]SyncQueueItem, error) {
 		default:
 			it.Status = "ok"
 		}
+		if it.Status != "failed" && it.Status != "blocked" {
+			it.LastError = "" // a stale failure isn't the current status
+		}
 		items = append(items, it)
 	}
 	rank := map[string]int{"running": 0, "blocked": 1, "queued": 1, "failed": 2, "ok": 3}

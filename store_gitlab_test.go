@@ -201,6 +201,7 @@ func TestGetGitLabSyncQueue(t *testing.T) {
 	mk("due")
 	s.RecordGitLabSync(userID, fresh, nil)
 	s.RecordGitLabSync(userID, failed, errors.New("push rejected"))
+	s.RecordGitLabSync(userID, run, errors.New("old failure"))
 	s.gitlabSyncing.Store(userID+"/"+run, struct{}{})
 
 	// Without GitLab settings everything not running is blocked.
@@ -224,6 +225,9 @@ func TestGetGitLabSyncQueue(t *testing.T) {
 	}
 	if got[2].LastError != "push rejected" {
 		t.Errorf("last error = %q", got[2].LastError)
+	}
+	if got[0].LastError != "" {
+		t.Errorf("running item still shows old error %q", got[0].LastError)
 	}
 }
 
