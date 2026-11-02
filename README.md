@@ -71,6 +71,16 @@ All data endpoints require a valid session cookie (set by `/api/login` or `/api/
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `POST` | `/api/register` | Create account |
+| `POST` | `/api/login` | Sign in |
+| `POST` | `/api/logout` | Sign out |
+| `GET` | `/api/me` | Current user |
+| `GET` | `/api/projects` | List tracked projects |
+| `POST` | `/api/projects` | Add project `{name, platform, repo_url}` |
+| `DELETE` | `/api/projects?id=<id>` | Stop tracking a project |
+| `GET` | `/api/releases` | All releases for tracked projects |
+| `POST` | `/api/refresh?id=<id>` | Refresh a specific project |
+| `GET` | `/api/refresh-check` | Trigger background refresh of stale repos |
 | `GET` | `/api/webhooks?repo_id=<id>` | List webhooks for a project |
 | `POST` | `/api/webhooks` | Add webhook `{repo_id, url, secret?}` |
 | `DELETE` | `/api/webhooks?id=<id>` | Remove a webhook |
@@ -84,19 +94,11 @@ All data endpoints require a valid session cookie (set by `/api/login` or `/api/
 | `POST` | `/api/project-gitlab-sync/sync-now?repo_id=<id>` | Manually trigger a GitLab sync |
 | `GET` | `/api/gitlab-sync-queue` | Sync-enabled projects with status, last/next sync and last error |
 | `POST` | `/api/project-settings` | Per-project notification settings `{repo_id, push_enabled, email_immediate}` |
-
-
-|--------|------|-------------|
-| `POST` | `/api/register` | Create account |
-| `POST` | `/api/login` | Sign in |
-| `POST` | `/api/logout` | Sign out |
-| `GET` | `/api/me` | Current user |
-| `GET` | `/api/projects` | List tracked projects |
-| `POST` | `/api/projects` | Add project `{name, platform, repo_url}` |
-| `DELETE` | `/api/projects?id=<id>` | Stop tracking a project |
-| `GET` | `/api/releases` | All releases for tracked projects |
-| `POST` | `/api/refresh?id=<id>` | Refresh a specific project |
-| `GET` | `/api/refresh-check` | Trigger background refresh of stale repos |
+| `POST` | `/api/resend-verification` | Resend the email-verification message |
+| `GET` / `POST` | `/api/account-settings` | Read / save account settings (e.g. `{page_size}`) |
+| `POST` | `/api/project-tags` | Set a project's tags `{repo_id, tags}` |
+| `GET` / `POST` | `/api/tags` | Tag descriptions |
+| `GET` | `/api/icon?id=<id>` | Cached project icon |
 
 ## Development
 

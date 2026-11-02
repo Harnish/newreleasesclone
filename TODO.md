@@ -13,6 +13,7 @@
 
 ## Done
 
+- [x] **README API table** — the two halves of the endpoint table had lost the second header and rendered as plain text; merged into one table and added the missing endpoints (resend-verification, account-settings, project-tags, tags, icon)
 - [x] **Sync queue shows only the current status** — a project that is running, queued or ok no longer lists its previous failure; the error shows only while the status is failed (or blocked)
 - [x] **Platform badge links out** — the GITHUB / GITLAB / NPM / … badge next to a project name (list, project popup, Projects tab) now opens the project's page on that platform in a new tab (uses the stored `repo_url`; plain label if it isn't an http(s) URL)
 - [x] **Mirror cache for GitLab sync** — each sync-enabled project keeps a bare mirror in `data/mirrors/<user>_<repo>.git` and only fetches what changed (`git fetch --prune`) instead of a fresh clone every time. The source URL (and any GitHub token) is passed per call, never saved in the repo config; a cache that fails to update is deleted and rebuilt once. Caches are not removed when sync is turned off or the project deleted
