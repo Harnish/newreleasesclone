@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -876,12 +877,23 @@ func (s *Store) DeleteVerificationTokensForUser(userID string) error {
 
 // AddRepo finds or creates the shared repo record, then adds it to the user's
 // tracking list. Returns the repo ID. Idempotent — safe to call multiple times.
+// errAlreadyTracked is returned by AddRepo when the user already tracks the repo.
+var errAlreadyTracked = errors.New("you are already tracking this project")
+
+// AddRepo links userID to the shared repo record, creating it if needed.
+// Returns errAlreadyTracked if the user already has it. URLs compare
+// case-insensitively (GitHub, npm, PyPI... ignore case) except helm-repo,
+// where the path may be case-sensitive.
 func (s *Store) AddRepo(userID string, p Project) (string, error) {
 	normURL := normalizeURL(p.RepoURL)
 
 	var repoID string
+	match := "repo_url = ?"
+	if p.Platform != "helm-repo" {
+		match = "lower(repo_url) = lower(?)"
+	}
 	err := s.db.QueryRow(
-		"SELECT id FROM repos WHERE platform = ? AND repo_url = ?",
+		"SELECT id FROM repos WHERE platform = ? AND "+match,
 		p.Platform, normURL,
 	).Scan(&repoID)
 
@@ -897,10 +909,16 @@ func (s *Store) AddRepo(userID string, p Project) (string, error) {
 		return "", fmt.Errorf("failed to look up repo: %w", err)
 	}
 
-	s.db.Exec(
+	res, err := s.db.Exec(
 		"INSERT OR IGNORE INTO user_repos (user_id, repo_id, created_at) VALUES (?, ?, ?)",
 		userID, repoID, time.Now().Format(time.RFC3339),
 	)
+	if err != nil {
+		return "", fmt.Errorf("failed to track repo: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return repoID, errAlreadyTracked
+	}
 	return repoID, nil
 }
 

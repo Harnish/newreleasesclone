@@ -76,7 +76,7 @@ All data endpoints require a valid session cookie (set by `/api/login` or `/api/
 | `POST` | `/api/logout` | Sign out |
 | `GET` | `/api/me` | Current user |
 | `GET` | `/api/projects` | List tracked projects |
-| `POST` | `/api/projects` | Add project `{name, platform, repo_url}` |
+| `POST` | `/api/projects` | Add project `{name, platform, repo_url}`; `409` if you already track it |
 | `DELETE` | `/api/projects?id=<id>` | Stop tracking a project |
 | `GET` | `/api/releases` | All releases for tracked projects |
 | `POST` | `/api/refresh?id=<id>` | Refresh a specific project |

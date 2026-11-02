@@ -77,6 +77,31 @@ func TestHandleProjectsPOST(t *testing.T) {
 	}
 }
 
+func TestHandleProjectsPOSTDuplicate(t *testing.T) {
+	originalStore := store
+	defer func() { store = originalStore }()
+
+	store = newTestStore(t)
+	_, cookie := newTestAuth(t, store)
+
+	post := func() *httptest.ResponseRecorder {
+		body := `{"name":"Dup","platform":"npm","repo_url":"https://www.npmjs.com/package/dup"}`
+		req, _ := http.NewRequest("POST", "/api/projects", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		requireAuth(handleProjects).ServeHTTP(w, req)
+		return w
+	}
+	if w := post(); w.Code != http.StatusOK {
+		t.Fatalf("first add: got %d", w.Code)
+	}
+	w := post()
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "already tracking Dup") {
+		t.Errorf("second add: got %d %q, want 409 with message", w.Code, w.Body.String())
+	}
+}
+
 // TestHandleReleases tests the GET /api/releases endpoint
 func TestHandleReleases(t *testing.T) {
 	originalStore := store

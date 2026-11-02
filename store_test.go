@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -490,5 +491,28 @@ func BenchmarkStoreAddRelease(b *testing.B) {
 			Version:  fmt.Sprintf("v%d.0.0", i),
 			Platform: "github",
 		})
+	}
+}
+
+func TestStoreAddRepoRejectsDuplicateForSameUser(t *testing.T) {
+	s := newTestStore(t)
+	u, _ := s.CreateUser("dup@example.com", "password123")
+	id, err := s.AddRepo(u.ID, Project{Name: "K", Platform: "github", RepoURL: "https://github.com/kubernetes/kubernetes"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, url := range []string{
+		"https://github.com/kubernetes/kubernetes",
+		"https://github.com/kubernetes/kubernetes/",
+		"https://github.com/kubernetes/kubernetes.git",
+		"https://github.com/Kubernetes/Kubernetes",
+	} {
+		got, err := s.AddRepo(u.ID, Project{Name: "K", Platform: "github", RepoURL: url})
+		if !errors.Is(err, errAlreadyTracked) || got != id {
+			t.Errorf("AddRepo(%q) = %q, %v; want %q, errAlreadyTracked", url, got, err, id)
+		}
+	}
+	if n := len(s.GetUserRepos(u.ID)); n != 1 {
+		t.Errorf("user has %d repos, want 1", n)
 	}
 }

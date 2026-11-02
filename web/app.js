@@ -1596,7 +1596,7 @@ document.getElementById('add-form').addEventListener('submit', function(e) {
         closeAddPanel();
         loadReleases();
     }).catch(function(err) {
-        toast('Error: ' + err, 'err');
+        toast(err.message.trim(), 'err');
     }).finally(function() {
         btn.disabled = false; btn.textContent = 'Add Project';
     });

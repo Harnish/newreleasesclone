@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -398,6 +399,10 @@ func handleProjects(w http.ResponseWriter, r *http.Request, userID string) {
 			}
 		}
 		repoID, err := store.AddRepo(userID, p)
+		if errors.Is(err, errAlreadyTracked) {
+			http.Error(w, "You are already tracking "+p.Name+".", http.StatusConflict)
+			return
+		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
