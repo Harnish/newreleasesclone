@@ -2,6 +2,16 @@
 
 Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm charts. Multi-user with shared release data.
 
+## Screenshots
+
+Demo data from a throwaway instance.
+
+![Project list with tag filters, platform badges and recent versions](docs/screenshots/projects.jpg)
+
+| Project detail | Account settings |
+|---|---|
+| ![Project popup with description and last 10 versions](docs/screenshots/project-detail.jpg) | ![Account settings: email digest, RSS feed, GitHub token, GitLab sync, tags](docs/screenshots/account-settings.jpg) |
+
 ## Features
 
 - **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub, Helm (Artifact Hub & custom repos)

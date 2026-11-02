@@ -13,6 +13,7 @@
 
 ## Done
 
+- [x] **README screenshots** — project list, project popup and account settings in `docs/screenshots/`, taken from a throwaway local instance with demo data (no real projects or tokens)
 - [x] **No duplicate projects** — adding a project you already track now fails with a 409 "You are already tracking <name>." (before, it silently succeeded and re-triggered a refresh). Matching ignores trailing `/` and `.git`, and case for GitHub, GitLab, PyPI and Docker only (npm has packages differing only by case; Helm paths can be case-sensitive); the add form shows the message as-is
 - [x] **README API table** — the two halves of the endpoint table had lost the second header and rendered as plain text; merged into one table and added the missing endpoints (resend-verification, account-settings, project-tags, tags, icon)
 - [x] **Sync queue shows only the current status** — a project that is running, queued or ok no longer lists its previous failure; the error shows only while the status is failed (or blocked)
