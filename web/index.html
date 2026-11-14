@@ -13,7 +13,7 @@
 <div id="auth-page">
 <div class="auth-wrap">
 <div class="auth-card">
-    <div class="auth-title">&#x1F680; Release Tracker</div>
+    <h1 class="auth-title"><span aria-hidden="true">&#x1F680;</span> Release Tracker</h1>
     <div class="auth-subtitle">Track software releases across GitHub, NPM, PyPI and more.</div>
 
     <div class="auth-tabs">
@@ -25,24 +25,24 @@
 
     <form id="login-form" class="auth-form active" onsubmit="doLogin(event)">
         <div class="form-group">
-            <label>Email</label>
-            <input type="email" name="email" required autocomplete="email">
+            <label for="login-email">Email</label>
+            <input type="email" name="email" id="login-email" required autocomplete="email">
         </div>
         <div class="form-group">
-            <label>Password</label>
-            <input type="password" name="password" required autocomplete="current-password">
+            <label for="login-password">Password</label>
+            <input type="password" name="password" id="login-password" required autocomplete="current-password">
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%" id="login-btn">Sign In</button>
     </form>
 
     <form id="register-form" class="auth-form" onsubmit="doRegister(event)">
         <div class="form-group">
-            <label>Email</label>
-            <input type="email" name="email" required autocomplete="email">
+            <label for="reg-email">Email</label>
+            <input type="email" name="email" id="reg-email" required autocomplete="email">
         </div>
         <div class="form-group">
-            <label>Password <span style="color:#8796ad">(min 8 chars)</span></label>
-            <input type="password" name="password" required minlength="8" autocomplete="new-password">
+            <label for="reg-password">Password <span style="color:var(--text-muted)">(min 8 chars)</span></label>
+            <input type="password" name="password" id="reg-password" required minlength="8" autocomplete="new-password">
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%" id="register-btn">Create Account</button>
     </form>
@@ -52,43 +52,44 @@
 
 <!-- ===================== MAIN APP ===================== -->
 <div id="app-page" style="display:none">
+<a class="skip-link" href="#main">Skip to projects</a>
 
 <header class="app-header">
-    <span>&#x1F680;</span>
-    <span class="app-title">Release Tracker</span>
+    <span aria-hidden="true">&#x1F680;</span>
+    <h1 class="app-title">Release Tracker</h1>
     <div class="user-info">
         <span class="username" id="username-display"></span>
-        <button class="btn btn-ghost" onclick="openAccountPanel()" title="Account settings" aria-label="Account settings" style="font-size:1rem;padding:0.3rem 0.5rem">&#x2699;</button>
-        <button class="btn btn-ghost" id="notif-btn" onclick="toggleNotifications()" title="Enable push notifications" aria-label="Push notifications" style="font-size:1rem;padding:0.3rem 0.5rem">&#x1F514;</button>
+        <button class="btn btn-ghost" onclick="openAccountPanel()" title="Account settings" aria-label="Account settings" style="font-size:var(--fs-md);padding:0.3rem 0.5rem">&#x2699;</button>
+        <button class="btn btn-ghost" id="notif-btn" onclick="toggleNotifications()" title="Enable push notifications" aria-label="Push notifications" style="font-size:var(--fs-md);padding:0.3rem 0.5rem">&#x1F514;</button>
         <button class="btn btn-ghost" onclick="doLogout()">Sign out</button>
     </div>
 </header>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
-<div id="verify-banner" style="display:none;background:#422006;color:#fbbf24;border-bottom:1px solid #92400e;padding:0.6rem 1.1rem;font-size:0.85rem">
+<div id="verify-banner" style="display:none;background:var(--warn-bg);color:var(--warn-text);border-bottom:1px solid #92400e;padding:0.6rem 1.1rem;font-size:var(--fs-base)">
     Please verify your email address.
-    <button onclick="doResendVerification()" style="background:none;border:none;color:#fbbf24;text-decoration:underline;cursor:pointer;font-size:0.85rem;margin-left:0.5rem">Resend verification email</button>
-    <button onclick="dismissVerifyBanner()" style="background:none;border:none;color:#fbbf24;cursor:pointer;float:right;font-size:1rem">&#x2715;</button>
+    <button onclick="doResendVerification()" style="background:none;border:none;color:var(--warn-text);text-decoration:underline;cursor:pointer;font-size:var(--fs-base);margin-left:0.5rem">Resend verification email</button>
+    <button onclick="dismissVerifyBanner()" style="background:none;border:none;color:var(--warn-text);cursor:pointer;float:right;font-size:var(--fs-md)">&#x2715;</button>
 </div>
 
-<div id="gitlab-token-banner" role="alert" style="display:none;background:#3b0000;color:#fca5a5;border-bottom:1px solid #7f1d1d;padding:0.6rem 1.1rem;font-size:0.85rem">
+<div id="gitlab-token-banner" role="alert" style="display:none;background:var(--error-bg);color:var(--error-soft);border-bottom:1px solid var(--error-border);padding:0.6rem 1.1rem;font-size:var(--fs-base)">
     GitLab no longer accepts your saved token, so syncing is paused.
     <a id="gitlab-token-link" target="_blank" rel="noopener noreferrer" style="color:#fecaca;font-weight:600">Create a new token on your GitLab server</a>
-    (scope: api), then paste it into <button onclick="openAccountPanel()" style="background:none;border:none;color:#fecaca;text-decoration:underline;cursor:pointer;font-size:0.85rem;padding:0">Account settings</button>.
-    <button onclick="document.getElementById('gitlab-token-banner').style.display='none'" aria-label="Dismiss" style="background:none;border:none;color:#fca5a5;cursor:pointer;float:right;font-size:1rem">&#x2715;</button>
+    (scope: api), then paste it into <button onclick="openAccountPanel()" style="background:none;border:none;color:#fecaca;text-decoration:underline;cursor:pointer;font-size:var(--fs-base);padding:0">Account settings</button>.
+    <button onclick="document.getElementById('gitlab-token-banner').style.display='none'" aria-label="Dismiss" style="background:none;border:none;color:var(--error-soft);cursor:pointer;float:right;font-size:var(--fs-md)">&#x2715;</button>
 </div>
 
-<div class="content">
+<main class="content" id="main">
     <div class="releases-header">
-        <span class="releases-title">Projects</span>
+        <h2 class="releases-title">Projects</h2>
         <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;justify-content:flex-end">
-            <label style="font-size:0.8rem;color:#94a3b8" for="sort-select">Sort:</label>
+            <label style="font-size:var(--fs-sm);color:var(--text-secondary)" for="sort-select">Sort:</label>
             <select id="sort-select" class="page-size-select" onchange="onSortChange(this.value)">
                 <option value="latest">Latest release</option>
                 <option value="added">Date added</option>
                 <option value="name">Name (A–Z)</option>
             </select>
-            <label style="font-size:0.8rem;color:#94a3b8" for="page-size-select">Per page:</label>
+            <label style="font-size:var(--fs-sm);color:var(--text-secondary)" for="page-size-select">Per page:</label>
             <select id="page-size-select" class="page-size-select" onchange="onPageSizeChange(this.value)">
                 <option value="10">10</option>
                 <option value="20">20</option>
@@ -100,15 +101,15 @@
     <div id="tag-filter" class="tag-filter" style="display:none" role="group" aria-label="Filter by tag"></div>
     <div class="releases-area">
         <div id="releases-root"><div class="loading">Loading...</div></div>
-        <div id="add-panel" class="add-panel">
+        <div id="add-panel" class="add-panel" role="region" aria-labelledby="add-panel-h">
             <div class="add-panel-inner">
                 <div class="add-panel-title">
-                    Add Project
-                    <button class="btn btn-ghost" aria-label="Close" onclick="closeAddPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                    <h2 class="panel-title" id="add-panel-h" tabindex="-1">Add Project</h2>
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeAddPanel()" style="font-size:var(--fs-md);padding:0.2rem 0.4rem">&#x2715;</button>
                 </div>
                 <form id="add-form">
                     <div class="form-group">
-                        <label>Platform</label>
+                        <label for="add-platform">Platform</label>
                         <select name="platform" id="add-platform" required onchange="onPlatformChange()">
                             <option value="github">GitHub</option>
                             <option value="gitlab">GitLab</option>
@@ -121,38 +122,38 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label id="add-repo-label">Repository</label>
+                        <label id="add-repo-label" for="add-repo-url">Repository</label>
                         <input type="text" name="repo_url" id="add-repo-url" required placeholder="owner/repo" oninput="autoFillName()">
-                        <span id="add-repo-hint" style="display:block;font-size:0.74rem;color:#8796ad;margin-top:0.3rem"></span>
+                        <span id="add-repo-hint" style="display:block;font-size:var(--fs-xs);color:var(--text-muted);margin-top:0.3rem"></span>
                     </div>
                     <div class="form-group">
-                        <label>Display name</label>
+                        <label for="add-name">Display name</label>
                         <input type="text" name="name" id="add-name" required placeholder="e.g., kubernetes">
                     </div>
                     <button type="submit" class="btn btn-primary" id="add-btn" style="width:100%">Add Project</button>
                 </form>
             </div>
         </div>
-        <div id="settings-panel" class="settings-panel">
+        <div id="settings-panel" class="settings-panel" role="dialog" aria-labelledby="settings-panel-title">
             <div class="settings-panel-inner">
                 <div class="add-panel-title">
-                    <span id="settings-panel-title">Settings</span>
-                    <button class="btn btn-ghost" aria-label="Close" onclick="closeSettingsPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                    <h2 class="panel-title" id="settings-panel-title" tabindex="-1">Settings</h2>
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeSettingsPanel()" style="font-size:var(--fs-md);padding:0.2rem 0.4rem">&#x2715;</button>
                 </div>
                 <div id="settings-panel-body"></div>
             </div>
         </div>
-        <div id="account-panel" class="account-panel">
+        <div id="account-panel" class="account-panel" role="dialog" aria-labelledby="account-panel-h">
             <div class="account-panel-inner">
                 <div class="add-panel-title">
-                    Account Settings
-                    <button class="btn btn-ghost" aria-label="Close" onclick="closeAccountPanel()" style="font-size:1rem;padding:0.2rem 0.4rem">&#x2715;</button>
+                    <h2 class="panel-title" id="account-panel-h" tabindex="-1">Account Settings</h2>
+                    <button class="btn btn-ghost" aria-label="Close" onclick="closeAccountPanel()" style="font-size:var(--fs-md);padding:0.2rem 0.4rem">&#x2715;</button>
                 </div>
                 <div id="account-panel-body"></div>
             </div>
         </div>
     </div>
-</div>
+</main>
 
 </div><!-- /app-page -->
 

@@ -247,7 +247,7 @@ function loadAccountPanel() {
     // Show loading indicator
     body.textContent = '';
     var loading = document.createElement('div');
-    loading.style.cssText = 'font-size:0.85rem;color:#8796ad';
+    loading.style.cssText = 'font-size:var(--fs-base);color:var(--text-muted)';
     loading.textContent = 'Loading...';
     body.appendChild(loading);
 
@@ -271,7 +271,7 @@ function loadAccountPanel() {
             var userSection = document.createElement('div');
             userSection.style.marginBottom = '1rem';
             var userLabel = document.createElement('div');
-            userLabel.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-bottom:0.25rem';
+            userLabel.style.cssText = 'font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:0.25rem';
             userLabel.textContent = 'Email';
             var userValue = document.createElement('div');
             userValue.style.fontSize = '0.9rem';
@@ -282,11 +282,11 @@ function loadAccountPanel() {
 
             // Daily email summary toggle row
             var row = document.createElement('div');
-            row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0;border-top:1px solid #334155';
+            row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0;border-top:1px solid var(--slate-border)';
 
             var lbl = document.createElement('label');
             lbl.htmlFor = 'digest-toggle';
-            lbl.style.cssText = 'font-size:0.85rem;cursor:' + (canUse ? 'pointer' : 'default');
+            lbl.style.cssText = 'font-size:var(--fs-base);cursor:' + (canUse ? 'pointer' : 'default');
             lbl.textContent = 'Daily email summary';
 
             var chk = document.createElement('input');
@@ -304,9 +304,9 @@ function loadAccountPanel() {
             var rssToken = currentUser && currentUser.rss_token;
             if (rssToken) {
                 var rssSection = document.createElement('div');
-                rssSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
+                rssSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid var(--slate-border)';
                 var rssLabel = document.createElement('div');
-                rssLabel.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-bottom:0.4rem';
+                rssLabel.style.cssText = 'font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:0.4rem';
                 rssLabel.textContent = 'RSS Feed';
                 rssSection.appendChild(rssLabel);
                 var rssRow = document.createElement('div');
@@ -316,11 +316,11 @@ function loadAccountPanel() {
                 rssInput.type = 'text';
                 rssInput.readOnly = true;
                 rssInput.value = feedURL;
-                rssInput.style.cssText = 'flex:1;font-size:0.75rem;padding:0.3rem 0.4rem;background:#1e293b;border:1px solid #334155;color:#94a3b8;border-radius:4px;min-width:0';
+                rssInput.style.cssText = 'flex:1;font-size:var(--fs-sm);padding:0.3rem 0.4rem;background:var(--slate-surface);border:1px solid var(--slate-border);color:var(--text-secondary);border-radius:4px;min-width:0';
                 rssRow.appendChild(rssInput);
                 var copyBtn = document.createElement('button');
                 copyBtn.className = 'btn btn-ghost';
-                copyBtn.style.cssText = 'font-size:0.75rem;padding:0.3rem 0.5rem;flex-shrink:0';
+                copyBtn.style.cssText = 'font-size:var(--fs-sm);padding:0.3rem 0.5rem;flex-shrink:0';
                 copyBtn.textContent = 'Copy';
                 copyBtn.onclick = function() {
                     navigator.clipboard.writeText(feedURL).then(function() {
@@ -336,9 +336,9 @@ function loadAccountPanel() {
             }
 
             var ghSection = document.createElement('div');
-            ghSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
+            ghSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid var(--slate-border)';
             var ghLabel = document.createElement('div');
-            ghLabel.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-bottom:0.4rem';
+            ghLabel.style.cssText = 'font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:0.4rem';
             ghLabel.textContent = 'GitHub token';
             ghSection.appendChild(ghLabel);
             var ghInput = document.createElement('input');
@@ -350,19 +350,19 @@ function loadAccountPanel() {
             ghInput.style.cssText = 'width:100%;margin-bottom:0.4rem;box-sizing:border-box';
             ghSection.appendChild(ghInput);
             var ghHint = document.createElement('div');
-            ghHint.style.cssText = 'font-size:0.72rem;color:#8796ad;margin-bottom:0.4rem';
+            ghHint.style.cssText = 'font-size:var(--fs-xs);color:var(--text-muted);margin-bottom:0.4rem';
             ghHint.textContent = 'Used when cloning GitHub repos for GitLab sync (private repos, rate limits). Read-only "Contents" access is enough.';
             ghSection.appendChild(ghHint);
             var ghSave = document.createElement('button');
             ghSave.className = 'btn btn-primary';
-            ghSave.style.cssText = 'font-size:0.78rem;margin-right:0.4rem';
+            ghSave.style.cssText = 'font-size:var(--fs-sm);margin-right:0.4rem';
             ghSave.textContent = 'Save';
             ghSave.onclick = function() { saveGitHubToken(ghInput.value); };
             ghSection.appendChild(ghSave);
             if (settings.has_github_token) {
                 var ghClear = document.createElement('button');
                 ghClear.className = 'btn';
-                ghClear.style.cssText = 'font-size:0.78rem';
+                ghClear.style.cssText = 'font-size:var(--fs-sm)';
                 ghClear.textContent = 'Remove';
                 ghClear.onclick = function() { saveGitHubToken(''); };
                 ghSection.appendChild(ghClear);
@@ -370,9 +370,9 @@ function loadAccountPanel() {
             body.appendChild(ghSection);
 
             var glSection = document.createElement('div');
-            glSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
+            glSection.style.cssText = 'padding:0.75rem 0;border-top:1px solid var(--slate-border)';
             var glLabel = document.createElement('div');
-            glLabel.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-bottom:0.4rem';
+            glLabel.style.cssText = 'font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:0.4rem';
             glLabel.textContent = 'GitLab Sync';
             glSection.appendChild(glLabel);
 
@@ -403,13 +403,13 @@ function loadAccountPanel() {
             glSection.appendChild(glGroupInput);
 
             var glGroupHint = document.createElement('div');
-            glGroupHint.style.cssText = 'font-size:0.72rem;color:#8796ad;margin:-0.2rem 0 0.4rem';
+            glGroupHint.style.cssText = 'font-size:var(--fs-xs);color:var(--text-muted);margin:-0.2rem 0 0.4rem';
             glGroupHint.textContent = 'Mirrors go to <group>/<upstream-owner>/<repo> instead of your personal namespace. The group must already exist in GitLab.';
             glSection.appendChild(glGroupHint);
 
             var glSaveBtn = document.createElement('button');
             glSaveBtn.className = 'btn btn-primary';
-            glSaveBtn.style.cssText = 'font-size:0.78rem';
+            glSaveBtn.style.cssText = 'font-size:var(--fs-sm)';
             glSaveBtn.textContent = 'Save GitLab Settings';
             glSaveBtn.onclick = function() { saveGitLabSettings(); };
             glSection.appendChild(glSaveBtn);
@@ -418,7 +418,7 @@ function loadAccountPanel() {
             awesomeRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0;margin-top:0.6rem;border-top:1px solid #1a2535';
             var awesomeLbl = document.createElement('label');
             awesomeLbl.htmlFor = 'awesome-toggle';
-            awesomeLbl.style.cssText = 'font-size:0.85rem;cursor:pointer';
+            awesomeLbl.style.cssText = 'font-size:var(--fs-base);cursor:pointer';
             awesomeLbl.textContent = 'Generate Awesome page';
             var awesomeChk = document.createElement('input');
             awesomeChk.type = 'checkbox';
@@ -442,7 +442,7 @@ function loadAccountPanel() {
             body.appendChild(buildSyncQueueSection());
 
             var tagSection = document.createElement('div');
-            tagSection.style.cssText = 'margin-top:1rem;padding-top:0.75rem;border-top:1px solid #334155';
+            tagSection.style.cssText = 'margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--slate-border)';
             var tagTitle = document.createElement('div');
             tagTitle.className = 'settings-section-title';
             tagTitle.textContent = 'Tags';
@@ -456,13 +456,14 @@ function loadAccountPanel() {
             tagSection.appendChild(tagHint);
             tagList.forEach(function(t) {
                 var lab = document.createElement('label');
-                lab.style.cssText = 'display:block;font-size:0.8rem;color:#cbd5e1;margin-top:0.5rem';
+                lab.style.cssText = 'display:block;font-size:var(--fs-sm);color:var(--text-soft);margin-top:0.5rem';
                 lab.textContent = t.tag + ' (' + t.count + ')';
                 var inp = document.createElement('input');
                 inp.type = 'text';
                 inp.className = 'webhook-input';
                 inp.maxLength = 200;
                 inp.placeholder = 'Describe this tag\u2026';
+                inp.setAttribute('aria-label', 'Description for tag ' + t.tag);
                 inp.value = t.description || '';
                 inp.style.cssText = 'width:100%;margin-top:0.2rem;box-sizing:border-box';
                 inp.onchange = function() { saveTagDescription(t.tag, inp.value); };
@@ -470,11 +471,55 @@ function loadAccountPanel() {
                 tagSection.appendChild(lab);
             });
             body.appendChild(tagSection);
+
+            var impSection = document.createElement('div');
+            impSection.style.cssText = 'margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--slate-border)';
+            var impTitle = document.createElement('div');
+            impTitle.className = 'settings-section-title';
+            impTitle.textContent = 'Import from newreleases.io';
+            impSection.appendChild(impTitle);
+            var impHint = document.createElement('div');
+            impHint.className = 'settings-hint';
+            impHint.style.marginBottom = '0.6rem';
+            impHint.textContent = 'Paste an API key (newreleases.io \u2192 Account \u2192 API keys). Adds your GitHub, GitLab, npm, PyPI and Docker Hub projects. The key is used once and not stored.';
+            impSection.appendChild(impHint);
+            var impKey = document.createElement('input');
+            impKey.type = 'password';
+            impKey.className = 'webhook-input';
+            impKey.autocomplete = 'off';
+            impKey.placeholder = 'API key';
+            impKey.setAttribute('aria-label', 'newreleases.io API key');
+            impKey.style.cssText = 'width:100%;box-sizing:border-box';
+            impSection.appendChild(impKey);
+            var impBtn = document.createElement('button');
+            impBtn.className = 'btn btn-primary';
+            impBtn.style.cssText = 'margin-top:0.5rem;width:100%';
+            impBtn.textContent = 'Import projects';
+            impBtn.onclick = function() {
+                if (!impKey.value.trim()) return;
+                impBtn.disabled = true; impBtn.textContent = 'Importing...';
+                fetch('/api/import-newreleases', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({api_key: impKey.value})})
+                    .then(function(r) {
+                        if (!r.ok) return r.text().then(function(t) { throw new Error(t || 'Import failed'); });
+                        return r.json();
+                    })
+                    .then(function(d) {
+                        impKey.value = '';
+                        toast('Imported ' + d.added + ', already tracked ' + d.existing +
+                            (d.skipped.length ? ', skipped ' + d.skipped.length + ' (unsupported): ' + d.skipped.slice(0, 5).join(', ') : ''), 'ok');
+                        loadProjects();
+                    })
+                    .catch(function(e) { toast(e.message, 'err'); })
+                    .then(function() { impBtn.disabled = false; impBtn.textContent = 'Import projects'; });
+            };
+            impSection.appendChild(impBtn);
+            body.appendChild(impSection);
         })
         .catch(function() {
             body.textContent = '';
             var err = document.createElement('div');
-            err.style.cssText = 'color:#f87171;font-size:0.85rem';
+            err.style.cssText = 'color:var(--error-text);font-size:var(--fs-base)';
             err.textContent = 'Failed to load settings.';
             body.appendChild(err);
         });
@@ -512,15 +557,15 @@ function syncErrorSummary(msg) {
 // Collapsible list of sync-enabled projects with their status and last error; loads when opened.
 function buildSyncQueueSection() {
     var det = document.createElement('details');
-    det.style.cssText = 'padding:0.75rem 0;border-top:1px solid #334155';
+    det.style.cssText = 'padding:0.75rem 0;border-top:1px solid var(--slate-border)';
     var sum = document.createElement('summary');
-    sum.style.cssText = 'font-size:0.8rem;color:#8796ad;cursor:pointer';
+    sum.style.cssText = 'font-size:var(--fs-sm);color:var(--text-muted);cursor:pointer';
     sum.textContent = 'GitLab sync queue';
     det.appendChild(sum);
     var list = document.createElement('div');
     list.style.marginTop = '0.5rem';
     det.appendChild(list);
-    var colors = {running: '#60a5fa', queued: '#fbbf24', blocked: '#f87171', failed: '#f87171', ok: '#4ade80'};
+    var colors = {running: 'var(--signal-blue)', queued: 'var(--warn-text)', blocked: 'var(--error-text)', failed: 'var(--error-text)', ok: 'var(--ok-text)'};
     function ago(iso) {
         if (!iso) return 'never';
         var d = new Date(iso);
@@ -531,36 +576,36 @@ function buildSyncQueueSection() {
         fetch('/api/gitlab-sync-queue').then(apiJSON).then(function(items) {
             list.textContent = '';
             if (!items.length) {
-                list.style.cssText = 'font-size:0.8rem;color:#8796ad;margin-top:0.5rem';
+                list.style.cssText = 'font-size:var(--fs-sm);color:var(--text-muted);margin-top:0.5rem';
                 list.textContent = 'No projects have GitLab sync enabled.';
                 return;
             }
             items.forEach(function(it) {
                 var row = document.createElement('div');
-                row.style.cssText = 'padding:0.4rem 0;border-bottom:1px solid #1a2535;font-size:0.82rem';
+                row.style.cssText = 'padding:0.4rem 0;border-bottom:1px solid #1a2535;font-size:var(--fs-sm)';
                 var head = document.createElement('div');
                 head.style.cssText = 'display:flex;justify-content:space-between;gap:0.5rem';
                 var name = document.createElement('span');
                 name.textContent = it.name;
                 var st = document.createElement('span');
-                st.style.color = colors[it.status] || '#8796ad';
+                st.style.color = colors[it.status] || 'var(--text-muted)';
                 st.textContent = it.status;
                 head.appendChild(name);
                 head.appendChild(st);
                 row.appendChild(head);
                 var meta = document.createElement('div');
-                meta.style.cssText = 'font-size:0.72rem;color:#8796ad';
+                meta.style.cssText = 'font-size:var(--fs-xs);color:var(--text-muted)';
                 meta.textContent = it.frequency + ' · last ' + ago(it.last_sync_at) +
                     (it.next_sync_at && it.status !== 'queued' ? ' · next ' + ago(it.next_sync_at) : '');
                 row.appendChild(meta);
                 if (it.last_error) {
                     var err = document.createElement('details');
-                    err.style.cssText = 'font-size:0.75rem;color:#f87171;margin-top:0.2rem;word-break:break-word';
+                    err.style.cssText = 'font-size:var(--fs-sm);color:var(--error-text);margin-top:0.2rem;word-break:break-word';
                     var es = document.createElement('summary');
                     es.style.cursor = 'pointer';
                     es.textContent = syncErrorSummary(it.last_error);
                     var raw = document.createElement('pre');
-                    raw.style.cssText = 'white-space:pre-wrap;max-height:10rem;overflow:auto;margin:0.3rem 0 0;font:inherit;color:#8796ad';
+                    raw.style.cssText = 'white-space:pre-wrap;max-height:10rem;overflow:auto;margin:0.3rem 0 0;font:inherit;color:var(--text-muted)';
                     raw.textContent = it.last_error;
                     err.appendChild(es);
                     err.appendChild(raw);
@@ -570,7 +615,7 @@ function buildSyncQueueSection() {
             });
             var re = document.createElement('button');
             re.className = 'btn';
-            re.style.cssText = 'font-size:0.75rem;margin-top:0.5rem';
+            re.style.cssText = 'font-size:var(--fs-sm);margin-top:0.5rem';
             re.textContent = 'Refresh';
             re.onclick = load;
             list.appendChild(re);
@@ -780,7 +825,7 @@ function buildReleasesHTML(releases, projects) {
                         'data-email-immediate="' + (proj && proj.email_immediate ? '1' : '0') + '" ' +
                         'data-include-prereleases="' + (proj && proj.include_prereleases ? '1' : '0') + '" ' +
                         'onclick="openSettingsPanel(this)">&#x2699;</button>' +
-                    '<button class="btn btn-ghost proj-ctrl" title="Delete" aria-label="Delete ' + esc(pname) + '" style="color:#f87171" ' +
+                    '<button class="btn btn-ghost proj-ctrl" title="Delete" aria-label="Delete ' + esc(pname) + '" style="color:var(--error-text)" ' +
                         'data-id="' + esc(pid) + '" data-name="' + esc(pname) + '" ' +
                         'onclick="doDelete(this)">&#x2715;</button>' +
                     '<span class="ver-count">' + rels.length + ' version' + (rels.length === 1 ? '' : 's') + '</span>' +
@@ -1044,7 +1089,7 @@ function closeSettingsPanel() {
 
 function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImmediate, includePre) {
     var body = document.getElementById('settings-panel-body');
-    body.innerHTML = '<div style="font-size:0.85rem;color:#8796ad">Loading...</div>';
+    body.innerHTML = '<div style="font-size:var(--fs-base);color:var(--text-muted)">Loading...</div>';
     fetch('/api/webhooks?repo_id=' + encodeURIComponent(id))
         .then(apiJSON)
         .then(function(hooks) {
@@ -1052,7 +1097,7 @@ function loadSettingsPanel(id, pushEnabled, glEnabled, glFreq, glError, emailImm
             addEmailToggleToPanel(id, !!emailImmediate);
         })
         .catch(function() {
-            body.innerHTML = '<div style="color:#f87171;font-size:0.85rem">Failed to load settings.</div>';
+            body.innerHTML = '<div style="color:var(--error-text);font-size:var(--fs-base)">Failed to load settings.</div>';
         });
 }
 
@@ -1094,18 +1139,18 @@ function renderGitLabSyncSection(id, enabled, freq, err) {
         return '<option value="' + f + '"' + (f === freq ? ' selected' : '') + '>' +
             f.charAt(0).toUpperCase() + f.slice(1) + '</option>';
     }).join('');
-    var errHtml = err ? '<div style="color:#f87171;font-size:0.75rem;margin-top:0.3rem">' + esc(err) + '</div>' : '';
+    var errHtml = err ? '<div style="color:var(--error-text);font-size:var(--fs-sm);margin-top:0.3rem">' + esc(err) + '</div>' : '';
     if (!enabled) {
         return '<div class="webhook-add" style="margin-top:0">' +
                 '<select id="gl-freq-' + esc(id) + '" class="webhook-input">' + freqOptions + '</select>' +
-                '<button class="btn btn-primary" style="font-size:0.78rem" onclick="doEnableGitLabSync(\'' + esc(id) + '\')">Enable Sync</button>' +
+                '<button class="btn btn-primary" style="font-size:var(--fs-sm)" onclick="doEnableGitLabSync(\'' + esc(id) + '\')">Enable Sync</button>' +
             '</div>' + errHtml;
     }
     return '<div class="toggle-row">' +
             '<span>Syncing ' + esc(freq) + '</span>' +
-            '<button class="btn btn-ghost" style="font-size:0.75rem" onclick="doSyncGitLabNow(\'' + esc(id) + '\')">Sync now</button>' +
+            '<button class="btn btn-ghost" style="font-size:var(--fs-sm)" onclick="doSyncGitLabNow(\'' + esc(id) + '\')">Sync now</button>' +
         '</div>' +
-        '<button class="btn btn-outline" style="font-size:0.75rem;margin-top:0.4rem" onclick="doDisableGitLabSync(\'' + esc(id) + '\')">Disable</button>' +
+        '<button class="btn btn-outline" style="font-size:var(--fs-sm);margin-top:0.4rem" onclick="doDisableGitLabSync(\'' + esc(id) + '\')">Disable</button>' +
         errHtml;
 }
 
@@ -1273,7 +1318,7 @@ function buildProjectsHTML(projects) {
                     '<div class="proj-card-meta">' +
                         platformBadge(p.platform, p.repo_url) +
                         backupLink +
-                        '<span style="color:#8796ad;font-size:0.75rem">' + sub + '</span>' +
+                        '<span style="color:var(--text-muted);font-size:var(--fs-sm)">' + sub + '</span>' +
                     '</div>' +
                     '<div class="proj-card-sub">' + esc(p.repo_url) + '</div>' +
                 '</div>' +
@@ -1358,7 +1403,7 @@ function toggleWebhooks(btn) {
     var panel = document.getElementById('whpanel-' + id);
     if (panel.style.display === 'none') {
         panel.style.display = 'block';
-        btn.style.color = '#60a5fa';
+        btn.style.color = 'var(--signal-blue)';
         loadWebhooks(id);
     } else {
         panel.style.display = 'none';
@@ -1369,28 +1414,28 @@ function toggleWebhooks(btn) {
 function loadWebhooks(repoID) {
     var panel = document.getElementById('whpanel-' + repoID);
     if (!panel) return;
-    panel.innerHTML = '<div style="font-size:0.8rem;color:#8796ad;padding:0.25rem 0">Loading...</div>';
+    panel.innerHTML = '<div style="font-size:var(--fs-sm);color:var(--text-muted);padding:0.25rem 0">Loading...</div>';
     fetch('/api/webhooks?repo_id=' + encodeURIComponent(repoID))
         .then(apiJSON)
         .then(function(hooks) { panel.innerHTML = renderWebhookPanel(repoID, hooks || []); })
-        .catch(function() { panel.innerHTML = '<div style="color:#f87171;font-size:0.8rem">Failed to load webhooks.</div>'; });
+        .catch(function() { panel.innerHTML = '<div style="color:var(--error-text);font-size:var(--fs-sm)">Failed to load webhooks.</div>'; });
 }
 
 function renderWebhookPanel(repoID, hooks) {
     var list = hooks.length ? hooks.map(function(h) {
-        var label = h.has_secret ? ' <span style="color:#8796ad;font-size:0.7rem">[signed]</span>' : '';
+        var label = h.has_secret ? ' <span style="color:var(--text-muted);font-size:var(--fs-xs)">[signed]</span>' : '';
         return '<div class="webhook-item">' +
             '<span class="webhook-url">' + esc(h.url) + label + '</span>' +
-            '<button class="btn btn-ghost" style="color:#f87171;font-size:0.75rem;padding:0.2rem 0.5rem" ' +
+            '<button class="btn btn-ghost" style="color:var(--error-text);font-size:var(--fs-sm);padding:0.2rem 0.5rem" ' +
                 'data-wid="' + esc(h.id) + '" data-repo="' + esc(repoID) + '" onclick="doDeleteWebhook(this)">Remove</button>' +
         '</div>';
-    }).join('') : '<div style="font-size:0.8rem;color:#8796ad;padding:0.25rem 0 0.5rem">No webhooks configured.</div>';
+    }).join('') : '<div style="font-size:var(--fs-sm);color:var(--text-muted);padding:0.25rem 0 0.5rem">No webhooks configured.</div>';
 
     return '<div>' + list + '</div>' +
         '<form class="webhook-add" onsubmit="doAddWebhook(event,\'' + esc(repoID) + '\')">' +
             '<input class="webhook-input" type="url" name="url" required placeholder="https://your-endpoint.com/webhook" style="flex:1;min-width:180px">' +
             '<input class="webhook-input" type="text" name="secret" placeholder="Secret (optional)" style="width:150px">' +
-            '<button type="submit" class="btn btn-primary" style="font-size:0.78rem">Add</button>' +
+            '<button type="submit" class="btn btn-primary" style="font-size:var(--fs-sm)">Add</button>' +
         '</form>';
 }
 
@@ -1471,7 +1516,7 @@ function onPlatformChange() {
     document.getElementById('add-repo-url').placeholder = cfg.placeholder || '';
     var hintEl = document.getElementById('add-repo-hint');
     hintEl.textContent = cfg.hint || '';
-    hintEl.style.color = '#475569';
+    hintEl.style.color = 'var(--text-muted)';
     document.getElementById('add-repo-url').value = '';
     document.getElementById('add-name').value = '';
 }
@@ -1518,15 +1563,15 @@ function autoFillName() {
         var detected = detectPlatform(val);
         if (detected) {
             hintEl.textContent = 'Detected: ' + detected;
-            hintEl.style.color = '#4ade80';
+            hintEl.style.color = 'var(--ok-text)';
             nameInput.value = extractNameFromURL(detected, val);
         } else if (val) {
             hintEl.textContent = 'URL not recognized — supported: GitHub, GitLab, npmjs.com, pypi.org, hub.docker.com';
-            hintEl.style.color = '#f87171';
+            hintEl.style.color = 'var(--error-text)';
             nameInput.value = '';
         } else {
             hintEl.textContent = platformConfig.other.hint;
-            hintEl.style.color = '#475569';
+            hintEl.style.color = 'var(--text-muted)';
             nameInput.value = '';
         }
         return;
@@ -1630,7 +1675,7 @@ function updateNotifBtn() {
     } else if (_pushSub) {
         btn.title = 'Push notifications on — click to disable';
         btn.style.opacity = '1';
-        btn.style.color = '#fbbf24';
+        btn.style.color = 'var(--warn-text)';
     } else {
         btn.title = 'Enable push notifications';
         btn.style.opacity = '0.6';
@@ -1714,3 +1759,41 @@ init();
 document.getElementById('detail-dialog').addEventListener('click', function(e) {
     if (e.target === this) this.close(); // backdrop click
 });
+
+
+// ---- Overlay panel focus: move focus in on open, back on close, Esc closes ----
+// Non-modal: the page behind stays reachable. The wide-screen Add column is not an overlay, so it is skipped.
+(function() {
+    var panels = [
+        {id: 'add-panel', close: function() { closeAddPanel(); }},
+        {id: 'settings-panel', close: function() { closeSettingsPanel(); }},
+        {id: 'account-panel', close: function() { closeAccountPanel(); }}
+    ];
+    var opener = null;
+    panels.forEach(function(p) {
+        var el = document.getElementById(p.id);
+        if (!el) return;
+        var wasOpen = false;
+        new MutationObserver(function() {
+            var open = el.classList.contains('open');
+            if (open === wasOpen) return;
+            wasOpen = open;
+            if (getComputedStyle(el).position !== 'fixed') return;
+            if (open) {
+                if (!opener || !document.contains(opener)) opener = document.activeElement;
+                var h = el.querySelector('.panel-title');
+                if (h) h.focus({preventScroll: true});
+            } else if (el.contains(document.activeElement) || document.activeElement === document.body) {
+                if (opener && document.contains(opener)) opener.focus({preventScroll: true});
+                opener = null;
+            }
+        }).observe(el, {attributes: true, attributeFilter: ['class']});
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+        panels.forEach(function(p) {
+            var el = document.getElementById(p.id);
+            if (el && el.classList.contains('open') && getComputedStyle(el).position === 'fixed') p.close();
+        });
+    });
+})();

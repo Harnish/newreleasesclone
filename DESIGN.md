@@ -21,6 +21,28 @@ colors:
   ok-text: "#4ade80"
   warn-text: "#fbbf24"
   warn-bg: "#422006"
+  text-soft: "#cbd5e1"
+  error-border: "#7f1d1d"
+  error-soft: "#fca5a5"
+  ok-bg: "#052e16"
+  ok-border: "#14532d"
+  info-text: "#93c5fd"
+  info-bg: "#172554"
+  white: "#ffffff"
+  badge-github-bg: "#1e3a5f"
+  badge-gitlab-bg: "#2e1f50"
+  badge-gitlab-text: "#c084fc"
+  badge-npm-bg: "#3b2000"
+  badge-npm-text: "#fb923c"
+  badge-pypi-bg: "#0c2a42"
+  badge-pypi-text: "#38bdf8"
+  badge-docker-bg: "#103a26"
+  badge-helm-bg: "#1a2e1a"
+  badge-helm-text: "#86efac"
+  warn-border: "#92400e"
+  error-deep: "#b91c1c"
+  success-deep: "#047857"
+  row-alt: "#162032"
 typography:
   title:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -36,6 +58,16 @@ typography:
     fontSize: "0.72rem"
     fontWeight: 700
     letterSpacing: "0.06em"
+  step-xs:
+    fontSize: "0.72rem"
+  step-sm:
+    fontSize: "0.8rem"
+  step-md:
+    fontSize: "1rem"
+  step-xl:
+    fontSize: "1.25rem"
+  step-input-mobile:
+    fontSize: "16px"
 rounded:
   xs: "3px"
   sm: "4px"
