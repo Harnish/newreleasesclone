@@ -14,6 +14,7 @@ Demo data from a throwaway instance.
 
 ## Features
 
+- **Import from newreleases.io**: Account Settings → paste an API key to bring over your GitHub, GitLab, npm, PyPI and Docker Hub projects
 - **Multi-platform**: GitHub, GitLab, NPM, PyPI, Docker Hub, Helm (Artifact Hub & custom repos)
 - **User accounts**: Register/login with session-based auth; each user tracks their own set of projects
 - **Shared release data**: Two users adding the same repo share one set of fetched releases

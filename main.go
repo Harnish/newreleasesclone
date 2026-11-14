@@ -69,6 +69,7 @@ func main() {
 	http.HandleFunc("/api/releases", requireAuth(handleReleases))
 	http.HandleFunc("/api/refresh-check", requireAuth(handleRefreshCheck))
 	http.HandleFunc("/api/refresh", requireAuth(handleRefreshProject))
+	http.HandleFunc("/api/import-newreleases", requireAuth(handleImportNewReleases))
 	http.HandleFunc("/api/webhooks", requireAuth(handleWebhooks))
 	http.HandleFunc("/api/project-settings", requireAuth(handleProjectSettings))
 	http.HandleFunc("/api/project-tags", requireAuth(handleProjectTags))
