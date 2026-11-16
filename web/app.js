@@ -315,6 +315,7 @@ function loadAccountPanel() {
                 var rssInput = document.createElement('input');
                 rssInput.type = 'text';
                 rssInput.readOnly = true;
+                rssInput.setAttribute('aria-label', 'RSS feed URL');
                 rssInput.value = feedURL;
                 rssInput.style.cssText = 'flex:1;font-size:var(--fs-sm);padding:0.3rem 0.4rem;background:var(--slate-surface);border:1px solid var(--slate-border);color:var(--text-secondary);border-radius:4px;min-width:0';
                 rssRow.appendChild(rssInput);
@@ -1142,7 +1143,7 @@ function renderGitLabSyncSection(id, enabled, freq, err) {
     var errHtml = err ? '<div style="color:var(--error-text);font-size:var(--fs-sm);margin-top:0.3rem">' + esc(err) + '</div>' : '';
     if (!enabled) {
         return '<div class="webhook-add" style="margin-top:0">' +
-                '<select id="gl-freq-' + esc(id) + '" class="webhook-input">' + freqOptions + '</select>' +
+                '<select id="gl-freq-' + esc(id) + '" class="webhook-input" aria-label="GitLab sync frequency">' + freqOptions + '</select>' +
                 '<button class="btn btn-primary" style="font-size:var(--fs-sm)" onclick="doEnableGitLabSync(\'' + esc(id) + '\')">Enable Sync</button>' +
             '</div>' + errHtml;
     }
@@ -1795,5 +1796,21 @@ document.getElementById('detail-dialog').addEventListener('click', function(e) {
             var el = document.getElementById(p.id);
             if (el && el.classList.contains('open') && getComputedStyle(el).position === 'fixed') p.close();
         });
+    });
+})();
+
+// ---- Name unlabeled panel inputs from their placeholder (panel bodies are rebuilt on every open) ----
+(function() {
+    function label(root) {
+        root.querySelectorAll('input, select, textarea').forEach(function(el) {
+            if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || el.closest('label') ||
+                (el.id && root.querySelector('label[for="' + el.id + '"]'))) return;
+            var t = el.placeholder || el.title;
+            if (t) el.setAttribute('aria-label', t.replace(/\s*\(.*$/, ''));
+        });
+    }
+    ['account-panel-body', 'settings-panel-body'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) new MutationObserver(function() { label(el); }).observe(el, {childList: true, subtree: true});
     });
 })();
