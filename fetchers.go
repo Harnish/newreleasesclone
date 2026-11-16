@@ -206,6 +206,17 @@ func dockerRepo(project Project) string {
 	return project.Name
 }
 
+// dockerTagTime returns the first parseable timestamp. Docker Hub dropped
+// last_pushed; tag_last_pushed / last_updated carry the date now. Zero if none.
+func dockerTagTime(candidates ...string) time.Time {
+	for _, c := range candidates {
+		if t, err := time.Parse(time.RFC3339, c); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
 func fetchDockerTags(project Project) []Release {
 	repo := dockerRepo(project)
 
@@ -224,8 +235,10 @@ func fetchDockerTags(project Project) []Release {
 
 	var dockerData struct {
 		Results []struct {
-			Name       string `json:"name"`
-			LastPushed string `json:"last_pushed"`
+			Name          string `json:"name"`
+			TagLastPushed string `json:"tag_last_pushed"`
+			LastUpdated   string `json:"last_updated"`
+			LastPushed    string `json:"last_pushed"` // older API shape
 		} `json:"results"`
 	}
 
@@ -236,7 +249,7 @@ func fetchDockerTags(project Project) []Release {
 
 	var releases []Release
 	for _, tag := range dockerData.Results {
-		pubTime, _ := time.Parse(time.RFC3339, tag.LastPushed)
+		pubTime := dockerTagTime(tag.TagLastPushed, tag.LastUpdated, tag.LastPushed)
 		releases = append(releases, Release{
 			ID:          fmt.Sprintf("docker_%s", tag.Name),
 			Name:        project.Name,
