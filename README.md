@@ -6,6 +6,8 @@ Track software releases across GitHub, GitLab, NPM, PyPI, Docker Hub, and Helm c
 
 Demo data from a throwaway instance.
 
+![Landing page for signed-out visitors: headline, supported platforms, sample releases, sign-in card and feature cards](docs/screenshots/landing.jpg)
+
 ![Project list with tag filters, platform badges and recent versions](docs/screenshots/projects.jpg)
 
 | Project detail | Account settings |
