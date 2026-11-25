@@ -13,6 +13,7 @@
 
 ## Done
 
+- [x] **Landing page for signed-out visitors** — the sign-in screen is now a landing page: headline, supported platforms, a sample release list, eight feature cards (notifications, webhooks, prereleases, release notes, tags, GitLab backup, newreleases.io import, self-hosted) and a "Create your free account" button; the sign-in card sits beside it (below it on phones). The page stays hidden until the session check fails, so signed-in users no longer see it flash
 - [x] **Docker tags showed "24666 mths ago"** — Docker Hub no longer returns `last_pushed`, so every tag got a zero date. The fetcher now reads `tag_last_pushed`, then `last_updated`, then `last_pushed`. Existing tags correct themselves on their next refresh
 - [x] **Import from newreleases.io** — Account settings → "Import from newreleases.io": paste an API key, `POST /api/import-newreleases` pages through newreleases.io's `/v1/projects` and adds the GitHub, GitLab, npm, PyPI and Docker Hub ones (others are listed as skipped). Key is never stored; 5 imports/hour/user. Response shape/provider names written from memory of their API, not verified against a live key
 - [x] **Last successful backup time** — the `[BACKUP]` link on each project now has the date/time of the last backup that worked next to it ("no successful backup yet" until one does). Stored separately from the last attempt (`user_repos.last_gitlab_success_at`, migration 20, backfilled from existing clean syncs) so a later failure doesn't overwrite it

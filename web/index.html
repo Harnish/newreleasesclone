@@ -10,11 +10,25 @@
 <body>
 
 <!-- ===================== AUTH PAGE ===================== -->
-<div id="auth-page">
-<div class="auth-wrap">
-<div class="auth-card">
-    <h1 class="auth-title"><span aria-hidden="true">&#x1F680;</span> Release Tracker</h1>
-    <div class="auth-subtitle">Track software releases across GitHub, NPM, PyPI and more.</div>
+<div id="auth-page" style="display:none">
+<div class="landing">
+<section class="landing-hero">
+<div class="landing-pitch">
+    <p class="landing-brand"><span aria-hidden="true">&#x1F680;</span> Release Tracker</p>
+    <h1 class="landing-title">Never miss a release of the software you depend on.</h1>
+    <p class="landing-lead">One feed for every project you rely on, across GitHub, GitLab, npm, PyPI, Docker Hub and Helm. When something ships, you hear about it. Otherwise it stays quiet.</p>
+    <ul class="landing-platforms" aria-label="Supported platforms">
+        <li class="badge github">GitHub</li><li class="badge gitlab">GitLab</li><li class="badge npm">npm</li><li class="badge pypi">PyPI</li><li class="badge docker">Docker Hub</li><li class="badge helm-artifacthub">Artifact Hub</li><li class="badge helm-repo">Helm repos</li>
+    </ul>
+    <div class="landing-sample" aria-hidden="true">
+        <div class="sample-row"><span class="proj-icon letter github">K</span><b>kubernetes</b><span class="badge github">github</span><span class="sample-ver">v1.35.0</span><span class="sample-age">just now</span></div>
+        <div class="sample-row"><span class="proj-icon letter npm">R</span><b>react</b><span class="badge npm">npm</span><span class="sample-ver">19.2.0</span><span class="sample-age">2 hrs ago</span></div>
+        <div class="sample-row"><span class="proj-icon letter docker">N</span><b>nginx</b><span class="badge docker">docker</span><span class="sample-ver">1.29.1</span><span class="sample-age">1 day ago</span></div>
+    </div>
+</div>
+<div class="auth-card" id="auth-card">
+    <h2 class="auth-title">Get started</h2>
+    <div class="auth-subtitle">Free account. Just an email and a password.</div>
 
     <div class="auth-tabs">
         <button class="auth-tab active" onclick="switchAuthTab('login', this)">Sign In</button>
@@ -47,6 +61,24 @@
         <button type="submit" class="btn btn-primary" style="width:100%" id="register-btn">Create Account</button>
     </form>
 </div>
+</section>
+
+<section class="landing-features" aria-labelledby="features-heading">
+    <h2 id="features-heading" class="landing-h2">Everything you need to keep up, and nothing you don't</h2>
+    <div class="feature-grid">
+        <div class="feature"><h3><span aria-hidden="true">&#x1F514;</span> Hear about it your way</h3><p>Browser push notifications, an email the moment a release lands, or a daily digest of yesterday's releases. You choose per project.</p></div>
+        <div class="feature"><h3><span aria-hidden="true">&#x1F517;</span> Signed webhooks</h3><p>Send new releases to your own automation, chat bot or CI, with optional HMAC-SHA256 signatures so you can trust what arrives.</p></div>
+        <div class="feature"><h3><span aria-hidden="true">&#x1F9EA;</span> Prereleases only if you want them</h3><p>Alphas, betas and release candidates are detected and hidden by default. Turn them on for the projects where you want an early look.</p></div>
+        <div class="feature"><h3><span aria-hidden="true">&#x1F4DD;</span> Release notes in one click</h3><p>Expand any version to read its notes, or open a project to see its last ten releases with dates. No visiting each project page.</p></div>
+        <div class="feature"><h3><span aria-hidden="true">&#x1F3F7;</span> Tags and sorting</h3><p>Group projects with your own tags, filter by them, and sort by latest release, date added or name.</p></div>
+        <div class="feature"><h3><span aria-hidden="true">&#x1F4BE;</span> Back up repos to your GitLab</h3><p>Mirror GitHub and GitLab projects to your own GitLab on a daily, weekly or monthly schedule, plus an auto-generated "Awesome" list of everything you track.</p></div>
+        <div class="feature"><h3><span aria-hidden="true">&#x1F4E5;</span> Bring your list with you</h3><p>Already on newreleases.io? Import your projects with your API key. Paste any project URL and the platform is detected for you.</p></div>
+        <div class="feature"><h3><span aria-hidden="true">&#x1F512;</span> Self-hosted, your data</h3><p>Runs on your own server. Project icons are cached by the server, so your browser never contacts third parties. Works the same on phone and desktop.</p></div>
+    </div>
+    <div class="landing-cta">
+        <a class="btn btn-primary" href="#auth-card" onclick="switchAuthTab('register', document.querySelectorAll('.auth-tab')[1]); document.getElementById('reg-email').focus()">Create your free account</a>
+    </div>
+</section>
 </div>
 </div>
 
