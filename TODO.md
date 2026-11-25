@@ -72,3 +72,5 @@
 - [x] Add Kubernetes manifests with PVC for data persistence (`k8s/newreleases.yaml`)
 - [x] Docker multi-stage build (non-root user, healthcheck, pinned base image)
 - [x] GitHub Actions + GitLab CI pipelines (build, test, push, Trivy scan)
+- [x] **Background release polling** — Releases view re-checks every 5 min and on tab focus; re-renders only when releases/projects changed, keeping the current page
+- [x] **Mobile project headers** — platform/backup badges wrap under the project name on phones instead of hiding it

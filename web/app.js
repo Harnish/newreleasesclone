@@ -1063,6 +1063,34 @@ function loadReleases() {
     });
 }
 
+// Quietly pick up releases found by background refreshes: re-render only
+// when the release/project set changed, keeping the current page.
+function releasesSig(rels, projs) {
+    return rels.map(function(r) { return r.id; }).join() + '|' + projs.map(function(p) { return p.id; }).join();
+}
+
+function pollReleases() {
+    if (!currentUser || document.hidden) return;
+    fetch('/api/refresh-check').catch(function() {});
+    Promise.all([
+        fetch('/api/releases').then(apiJSON),
+        fetch('/api/projects').then(apiJSON)
+    ]).then(function(res) {
+        var rels = res[0] || [], projs = res[1] || [];
+        if (releasesSig(rels, projs) === releasesSig(allReleases, allProjects)) return;
+        allReleases = rels;
+        allProjects = projs;
+        allProjects.forEach(function(p, i) { p._idx = i; });
+        sortProjects();
+        currentPage = Math.min(currentPage, Math.ceil(visibleProjects().length / pageSize) || 1);
+        renderTagFilter();
+        renderPage();
+    }).catch(function() {});
+}
+
+setInterval(pollReleases, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', pollReleases);
+
 // ---- Settings panel ----
 var _settingsRepoID = null;
 

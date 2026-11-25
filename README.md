@@ -32,7 +32,7 @@ Demo data from a throwaway instance.
 - **GitLab token check**: if GitLab stops accepting your saved token (expired or revoked), a banner links straight to the token page on your own GitLab server; it clears when you save a new token or a sync succeeds
 - **Tags**: label projects with tags of your own (e.g. "Emulator", "Self hosted") from a project's settings panel; filter the list by tag with the chips above it, describe each tag in Account settings, and the generated Awesome page groups projects by tag with those descriptions
 - **GitLab sync**: Register your own GitLab instance + API token (Account Settings), then opt any GitHub/GitLab project into a daily/weekly/monthly mirror push. The `[BACKUP]` link on a project shows when its last successful backup finished. Optional "Awesome" README, grouped by platform, auto-generated and pushed to a GitLab project under your namespace. An optional GitHub token (Account Settings) is used when cloning GitHub repos for the mirror, so private repos work. The Account panel's "GitLab sync queue" lists every sync-enabled project with its status and, only while it is failing, the last sync error (a one-line summary that expands to the full text)
-- **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load
+- **Auto-refresh**: Stale repos (>30 min) are refreshed in the background on page load; the Releases view polls every 5 minutes (and when the tab regains focus) and picks up new releases without a reload
 - **Full release notes**: GitHub/GitLab release bodies captured and expandable in the UI
 - **Accessible UI**: keyboard focus rings, screen-reader labels, AA-contrast text, touch-friendly controls on phones
 - **SQLite persistence**: All data stored in `data/newreleases.db`

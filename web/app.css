@@ -448,6 +448,9 @@ a.badge:hover { filter: brightness(1.25); text-decoration: underline; }
     .app-header { padding: 0.75rem 1rem; }
     .form-group input, .form-group select, .webhook-input, .page-size-select { font-size: 16px; }
     .proj-right { gap: 0.25rem; }
+    /* Badges wrap under the name instead of squeezing it to an ellipsis */
+    .proj-header-left { flex-wrap: wrap; row-gap: 0.35rem; }
+    .proj-name { flex: 1 0 60%; }
     .ver-count { display: none; }
     .username { display: none; }
 }
