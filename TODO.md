@@ -73,4 +73,4 @@
 - [x] Docker multi-stage build (non-root user, healthcheck, pinned base image)
 - [x] GitHub Actions + GitLab CI pipelines (build, test, push, Trivy scan)
 - [x] **Background release polling** — Releases view re-checks every 5 min and on tab focus; re-renders only when releases/projects changed, keeping the current page
-- [x] **Mobile project headers** — platform/backup badges wrap under the project name on phones instead of hiding it
+- [x] **Mobile project headers** — on phones the project name wraps onto as many lines as it needs (the 44px refresh/settings/delete buttons left it ~130px, so it was still cut to an ellipsis) and platform/backup badges wrap below it

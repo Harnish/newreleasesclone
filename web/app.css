@@ -450,7 +450,8 @@ a.badge:hover { filter: brightness(1.25); text-decoration: underline; }
     .proj-right { gap: 0.25rem; }
     /* Badges wrap under the name instead of squeezing it to an ellipsis */
     .proj-header-left { flex-wrap: wrap; row-gap: 0.35rem; }
-    .proj-name { flex: 1 0 60%; }
+    /* Controls keep 44px touch targets, so the name wraps instead of ellipsizing */
+    .proj-name { flex: 1 1 calc(100% - 2rem); white-space: normal; overflow-wrap: anywhere; }
     .ver-count { display: none; }
     .username { display: none; }
 }
